@@ -16,8 +16,8 @@ type Order struct {
 	CustomerName  string `gorm:"not null" json:"customer_name"`
 	CustomerPhone string `gorm:"not null" json:"customer_phone"`
 	// Optional patient data (internal only, never on the public tracking page).
-	PatientName     *string  `json:"patient_name"`
-	MedicalRecordNo *string  `json:"medical_record_no"`
+	PatientName     *string `json:"patient_name"`
+	MedicalRecordNo *string `json:"medical_record_no"`
 	// Program ongkir gratis (lihat handlers/free_program.go): kategori pasien +
 	// domisili yang dicek petugas. Gratis → Price 0, tarif normal di NormalPrice.
 	PatientCategory enums.PatientCategory `gorm:"type:varchar(20);not null;default:umum" json:"patient_category"`
@@ -26,12 +26,17 @@ type Order struct {
 	NormalPrice     *float64              `gorm:"type:decimal(12,2)" json:"normal_price"`
 	FreeVerifiedBy  *uint                 `json:"free_verified_by"`
 	FreeVerifiedAt  *time.Time            `json:"free_verified_at"`
-	PickupAddress   string   `gorm:"type:text;not null" json:"pickup_address"`
-	DropoffAddress  string   `gorm:"type:text;not null" json:"dropoff_address"`
-	PickupLat       *float64 `gorm:"type:decimal(10,7)" json:"pickup_lat"`
-	PickupLng       *float64 `gorm:"type:decimal(10,7)" json:"pickup_lng"`
-	DropoffLat      *float64 `gorm:"type:decimal(10,7)" json:"dropoff_lat"`
-	DropoffLng      *float64 `gorm:"type:decimal(10,7)" json:"dropoff_lng"`
+	// Farmasi: rawat jalan (+ no. antrian farmasi) atau rawat inap (+ bangsal).
+	CareType        *enums.CareType `gorm:"type:varchar(20)" json:"care_type"`
+	PharmacyQueueNo *string         `gorm:"type:varchar(20)" json:"pharmacy_queue_no"`
+	WardID          *uint           `json:"ward_id"`
+	Ward            *Ward           `json:"ward,omitempty"`
+	PickupAddress   string          `gorm:"type:text;not null" json:"pickup_address"`
+	DropoffAddress  string          `gorm:"type:text;not null" json:"dropoff_address"`
+	PickupLat       *float64        `gorm:"type:decimal(10,7)" json:"pickup_lat"`
+	PickupLng       *float64        `gorm:"type:decimal(10,7)" json:"pickup_lng"`
+	DropoffLat      *float64        `gorm:"type:decimal(10,7)" json:"dropoff_lat"`
+	DropoffLng      *float64        `gorm:"type:decimal(10,7)" json:"dropoff_lng"`
 
 	ServiceID *uint    `json:"service_id"`
 	Service   *Service `json:"service,omitempty"`

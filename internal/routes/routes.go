@@ -33,6 +33,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	licenseH := &handlers.LicenseHandler{DB: db}
 	courierAppH := handlers.NewCourierAppHandler(db, store)
 	routesH := &handlers.CourierRoutesHandler{DB: db, Router: router}
+	wardH := &handlers.WardHandler{DB: db}
 
 	api := app.Group("/api")
 
@@ -46,6 +47,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	pub.Get("/organization", pubH.Organization) // profil RS untuk header form order
 	pub.Post("/orders", pubH.StoreOrder)
 	pub.Get("/orders/:code", pubH.Track)
+	pub.Get("/pharmacy", settingsH.PublicPharmacy)                                          // farmasi di form publik/kiosk (+ bangsal aktif)
 	pub.Get("/payment-info", settingsH.PublicPayment)                                       // rekening & QRIS untuk non-tunai
 	pub.Post("/quote", pubH.Quote)                                                          // estimasi harga + jarak jalan untuk form order
 	pub.Get("/maps-link", pubH.MapsLink)                                                    // koordinat dari link Google Maps (termasuk link pendek)
@@ -106,7 +108,9 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	settings.Post("/payment/qris", settingsH.UploadQRIS)
 	settings.Delete("/payment/qris", settingsH.DeleteQRIS)
 	settings.Get("/setup-checklist", settingsH.SetupChecklist) // checklist setup awal di panel
-	settings.Put("/free-program", settingsH.UpdateFreeProgram)  // program ongkir gratis (lansia/disabilitas)
+	settings.Get("/pharmacy", settingsH.PharmacySettings)      // farmasi di form publik/kiosk
+	settings.Put("/pharmacy", settingsH.UpdatePharmacySettings)
+	settings.Put("/free-program", settingsH.UpdateFreeProgram) // program ongkir gratis (lansia/disabilitas)
 	// Status program ongkir gratis untuk form order petugas.
 	auth.Get("/free-program", admin(staff...), settingsH.FreeProgram)
 
@@ -136,6 +140,13 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	svcs.Post("/", svcH.Store)
 	svcs.Put("/:id", svcH.Update)
 	svcs.Delete("/:id", svcH.Destroy)
+
+	// Bangsal rawat inap: semua staff lihat (form order), Admin kelola.
+	wards := auth.Group("/wards")
+	wards.Get("/", admin(staff...), wardH.Index)
+	wards.Post("/", admin(enums.RoleAdmin), wardH.Store)
+	wards.Put("/:id", admin(enums.RoleAdmin), wardH.Update)
+	wards.Delete("/:id", admin(enums.RoleAdmin), wardH.Destroy)
 
 	users := auth.Group("/users", admin(enums.RoleAdmin))
 	users.Get("/", userH.Index)

@@ -35,6 +35,7 @@ func orderPreload(db *gorm.DB) *gorm.DB {
 	return db.
 		Preload("Organization").
 		Preload("Service").
+		Preload("Ward").
 		Preload("Courier.User").
 		Preload("Creator")
 }
@@ -53,8 +54,8 @@ func (h *OrderHandler) Index(c *fiber.Ctx) error {
 	if search := strings.TrimSpace(c.Query("search")); search != "" {
 		like := likePattern(search)
 		query = query.Where(
-			"(code LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ?)",
-			like, like, like,
+			"(code LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ? OR pharmacy_queue_no LIKE ?)",
+			like, like, like, like,
 		)
 	}
 	query, err := filterCreatedDate(c, query)
@@ -279,6 +280,7 @@ type storeOrderRequest struct {
 	SaveCustomer bool  `json:"save_customer"`
 	orderExtras
 	freeInput
+	pharmacyInput
 	PaymentMethod string `json:"payment_method"` // cash | noncash
 }
 
@@ -372,6 +374,9 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	// Picked up at the RS: start from its map point.
 	order.PickupLat, order.PickupLng = org.Lat, org.Lng
 	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
+		return err
+	}
+	if err := req.pharmacyInput.apply(h.DB, &order, true); err != nil {
 		return err
 	}
 	// Program ongkir gratis: the staff checked the patient's category & domicile.

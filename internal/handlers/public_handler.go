@@ -72,6 +72,8 @@ type publicOrderRequest struct {
 	// their medical record number at the RS.
 	PatientName     *string `json:"patient_name"`
 	MedicalRecordNo *string `json:"medical_record_no"`
+	// Farmasi: asked (and required) only while the Admin turned it on.
+	pharmacyInput
 	// cash (tunai di kasir RS) | noncash (transfer/QRIS, dicek CCO)
 	PaymentMethod string `json:"payment_method"`
 }
@@ -137,6 +139,11 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		// Picked up at the RS: start from its map point.
 		PickupLat: org.Lat,
 		PickupLng: org.Lng,
+	}
+	if pharmacyOnPublicForm(h.DB) {
+		if err := req.pharmacyInput.apply(h.DB, &order, true); err != nil {
+			return err
+		}
 	}
 	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
 		return err

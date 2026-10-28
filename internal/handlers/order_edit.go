@@ -31,6 +31,7 @@ type updateOrderRequest struct {
 	Notes          *string `json:"notes"`
 	orderExtras
 	freeInput
+	pharmacyInput
 }
 
 // Update — PUT /api/orders/:id (CCO/Admin). Corrects the order's details
@@ -134,6 +135,13 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 	if derefString(patientName) != derefString(order.PatientName) || derefString(medicalRecordNo) != derefString(order.MedicalRecordNo) {
 		order.PatientName, order.MedicalRecordNo = patientName, medicalRecordNo
 		changed = append(changed, "data pasien")
+	}
+	oldPharmacy := pharmacyKey(&order)
+	if err := req.pharmacyInput.apply(h.DB, &order, false); err != nil {
+		return err
+	}
+	if pharmacyKey(&order) != oldPharmacy {
+		changed = append(changed, "farmasi")
 	}
 	// Program ongkir gratis: CCO verifies the patient (e.g. on a public-form order).
 	oldCategory, oldChecked, wasFree := order.PatientCategory, order.DomicileChecked, order.IsFree

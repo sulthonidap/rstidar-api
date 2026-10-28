@@ -64,6 +64,24 @@ func (p PatientCategory) Label() string {
 	return "Umum"
 }
 
+// CareType: asal resep farmasi pada order.
+type CareType string
+
+const (
+	CareRawatJalan CareType = "rawat_jalan" // + no. antrian farmasi
+	CareRawatInap  CareType = "rawat_inap"  // + bangsal
+)
+
+func (t CareType) Valid() bool { return t == CareRawatJalan || t == CareRawatInap }
+
+// Label: "Rawat jalan" / "Rawat inap".
+func (t CareType) Label() string {
+	if t == CareRawatInap {
+		return "Rawat inap"
+	}
+	return "Rawat jalan"
+}
+
 // UserRole — nilainya sama persis dengan kolom roles.name di database.
 type UserRole string
 
