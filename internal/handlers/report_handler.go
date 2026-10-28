@@ -24,6 +24,8 @@ type recapRow struct {
 	Cancelled   int64          `json:"cancelled"`
 	InProgress  int64          `json:"in_progress"`
 	Revenue     *float64       `json:"revenue,omitempty"` // Admin & Finance only (nil = hidden)
+	Free        int64          `json:"free"`                // order gratis (program lansia/disabilitas), tidak termasuk yang batal
+	FreeValue   *float64       `json:"free_value,omitempty"` // total tarif normal yang digratiskan; Admin & Finance only
 	AvgReadyMin *float64       `json:"avg_ready_minutes"` // masuk → siap diambil (not for farmasi orders, they start ready)
 	AvgDoneMin  *float64       `json:"avg_done_minutes"`  // masuk → selesai
 	ByService   map[uint]int64 `json:"by_service" gorm:"-"`
@@ -89,6 +91,8 @@ func (h *ReportHandler) recap(c *fiber.Ctx) (*recapResult, error) {
 		COALESCE(SUM(status = '%[1]s'), 0) AS done,
 		COALESCE(SUM(status = '%[2]s'), 0) AS cancelled,
 		COALESCE(SUM(CASE WHEN status = '%[1]s' THEN price ELSE 0 END), 0) AS revenue,
+		COALESCE(SUM(is_free = 1 AND status <> '%[2]s'), 0) AS free,
+		COALESCE(SUM(CASE WHEN is_free = 1 AND status <> '%[2]s' THEN normal_price ELSE 0 END), 0) AS free_value,
 		AVG(CASE WHEN ready_at IS NOT NULL AND source <> '%[3]s' THEN TIMESTAMPDIFF(MINUTE, created_at, ready_at) END) AS avg_ready_min,
 		AVG(CASE WHEN status = '%[1]s' AND delivered_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE, created_at, delivered_at) END) AS avg_done_min`,
 		enums.OrderStatusDone, enums.OrderStatusCancelled, enums.OrderSourceFarmasi)
@@ -164,8 +168,10 @@ func (h *ReportHandler) recap(c *fiber.Ctx) (*recapResult, error) {
 	total.InProgress = total.Total - total.Done - total.Cancelled
 	for i := range rows {
 		rows[i].Revenue = revenueFor(rows[i].Revenue, withRevenue)
+		rows[i].FreeValue = revenueFor(rows[i].FreeValue, withRevenue)
 	}
 	total.Revenue = revenueFor(total.Revenue, withRevenue)
+	total.FreeValue = revenueFor(total.FreeValue, withRevenue)
 
 	return &recapResult{
 		Period: period, From: from.Format("2006-01-02"), To: to.AddDate(0, 0, -1).Format("2006-01-02"),

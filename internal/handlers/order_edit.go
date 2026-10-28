@@ -30,6 +30,7 @@ type updateOrderRequest struct {
 	DropoffAddress string  `json:"dropoff_address"`
 	Notes          *string `json:"notes"`
 	orderExtras
+	freeInput
 }
 
 // Update — PUT /api/orders/:id (CCO/Admin). Corrects the order's details
@@ -134,6 +135,15 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 		order.PatientName, order.MedicalRecordNo = patientName, medicalRecordNo
 		changed = append(changed, "data pasien")
 	}
+	// Program ongkir gratis: CCO verifies the patient (e.g. on a public-form order).
+	oldCategory, oldChecked, wasFree := order.PatientCategory, order.DomicileChecked, order.IsFree
+	if err := req.freeInput.apply(&order); err != nil {
+		return err
+	}
+	if order.PatientCategory != oldCategory || order.DomicileChecked != oldChecked {
+		changed = append(changed, "kategori pasien")
+	}
+	program := loadFreeProgram(h.DB)
 
 	// Re-price: the service, the destination point or the RS point may have changed.
 	var service models.Service
@@ -142,9 +152,11 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 		if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
 			return err
 		}
+		applyFree(program, &order, user.ID)
 		if order.Price != oldPrice {
-			// The patient paid the old price; a new one needs a refund first.
-			if isPaid(h.DB, order.ID) {
+			// The patient paid the old price; a new one needs a refund first
+			// (an order settled at Rp0 because it was free isn't "paid by the patient").
+			if paidByPatient(h.DB, order.ID) {
 				return fiber.NewError(fiber.StatusUnprocessableEntity,
 					fmt.Sprintf("order sudah lunas %s, perubahan ini membuat harga jadi %s. Refund dulu kalau layanan/alamat memang perlu diganti",
 						rupiah(oldPrice), rupiah(order.Price)))
@@ -155,8 +167,17 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 
 	if len(changed) > 0 {
 		note := "Diubah: " + strings.Join(changed, ", ")
+		switch {
+		case order.IsFree && !wasFree:
+			note += ". " + freeNote(program, &order)
+		case !order.IsFree && wasFree:
+			note += ". Ongkir tidak lagi gratis"
+		}
 		err := h.DB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Save(&order).Error; err != nil {
+				return err
+			}
+			if err := syncFreePayment(tx, &order, user.ID); err != nil {
 				return err
 			}
 			// Same from/to status marks an edit, not a step.

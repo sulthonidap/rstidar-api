@@ -40,6 +40,30 @@ const (
 
 func (m PaymentMethod) Valid() bool { return m == PaymentCash || m == PaymentNonCash }
 
+// PatientCategory: kategori pasien untuk program ongkir gratis.
+type PatientCategory string
+
+const (
+	PatientUmum        PatientCategory = "umum"
+	PatientLansia      PatientCategory = "lansia"
+	PatientDisabilitas PatientCategory = "disabilitas"
+)
+
+func (p PatientCategory) Valid() bool {
+	return p == PatientUmum || p == PatientLansia || p == PatientDisabilitas
+}
+
+// Label: "Lansia", "Disabilitas", "Umum".
+func (p PatientCategory) Label() string {
+	switch p {
+	case PatientLansia:
+		return "Lansia"
+	case PatientDisabilitas:
+		return "Disabilitas"
+	}
+	return "Umum"
+}
+
 // UserRole — nilainya sama persis dengan kolom roles.name di database.
 type UserRole string
 

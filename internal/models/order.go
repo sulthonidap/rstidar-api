@@ -18,6 +18,14 @@ type Order struct {
 	// Optional patient data (internal only, never on the public tracking page).
 	PatientName     *string  `json:"patient_name"`
 	MedicalRecordNo *string  `json:"medical_record_no"`
+	// Program ongkir gratis (lihat handlers/free_program.go): kategori pasien +
+	// domisili yang dicek petugas. Gratis → Price 0, tarif normal di NormalPrice.
+	PatientCategory enums.PatientCategory `gorm:"type:varchar(20);not null;default:umum" json:"patient_category"`
+	DomicileChecked bool                  `gorm:"not null;default:false" json:"domicile_checked"`
+	IsFree          bool                  `gorm:"not null;default:false" json:"is_free"`
+	NormalPrice     *float64              `gorm:"type:decimal(12,2)" json:"normal_price"`
+	FreeVerifiedBy  *uint                 `json:"free_verified_by"`
+	FreeVerifiedAt  *time.Time            `json:"free_verified_at"`
 	PickupAddress   string   `gorm:"type:text;not null" json:"pickup_address"`
 	DropoffAddress  string   `gorm:"type:text;not null" json:"dropoff_address"`
 	PickupLat       *float64 `gorm:"type:decimal(10,7)" json:"pickup_lat"`

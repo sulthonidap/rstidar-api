@@ -229,6 +229,7 @@ func (h *PublicHandler) Track(c *fiber.Ctx) error {
 		"organization":    org,
 		"service_name":    serviceName,
 		"price":           order.Price,
+		"is_free":         order.IsFree, // program ongkir gratis (lansia/disabilitas)
 		"customer_name":   privacy.Name(order.CustomerName),
 		"customer_phone":  maskPhone(order.CustomerPhone),
 		"dropoff_address": privacy.Address(order.DropoffAddress),

@@ -106,6 +106,9 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	settings.Post("/payment/qris", settingsH.UploadQRIS)
 	settings.Delete("/payment/qris", settingsH.DeleteQRIS)
 	settings.Get("/setup-checklist", settingsH.SetupChecklist) // checklist setup awal di panel
+	settings.Put("/free-program", settingsH.UpdateFreeProgram)  // program ongkir gratis (lansia/disabilitas)
+	// Status program ongkir gratis untuk form order petugas.
+	auth.Get("/free-program", admin(staff...), settingsH.FreeProgram)
 
 	// Customer tersimpan: CCO/Farmasi + Admin
 	customers := auth.Group("/customers", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi))

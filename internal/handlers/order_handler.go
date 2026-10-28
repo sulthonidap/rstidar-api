@@ -278,6 +278,7 @@ type storeOrderRequest struct {
 	CustomerID   *uint `json:"customer_id"`
 	SaveCustomer bool  `json:"save_customer"`
 	orderExtras
+	freeInput
 	PaymentMethod string `json:"payment_method"` // cash | noncash
 }
 
@@ -373,6 +374,15 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
 		return err
 	}
+	// Program ongkir gratis: the staff checked the patient's category & domicile.
+	if err := req.freeInput.apply(&order); err != nil {
+		return err
+	}
+	program := loadFreeProgram(h.DB)
+	applyFree(program, &order, user.ID)
+	if order.IsFree {
+		note = "Order dibuat. " + freeNote(program, &order)
+	}
 
 	err = h.DB.Transaction(func(tx *gorm.DB) error {
 		customerID, err := customerForOrder(tx, orgID, user.ID, &req)
@@ -384,6 +394,9 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 			return err
 		}
 		if err := openTransaction(tx, &order, paymentMethod); err != nil {
+			return err
+		}
+		if err := syncFreePayment(tx, &order, user.ID); err != nil {
 			return err
 		}
 		return tx.Create(&models.OrderStatusHistory{
