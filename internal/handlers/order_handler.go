@@ -245,7 +245,8 @@ func (h *OrderHandler) Show(c *fiber.Ctx) error {
 }
 
 // Labels — POST /api/orders/labels {ids}: data order LENGKAP (tidak disamarkan,
-// lihat middleware.MaskPatientData) khusus untuk dicetak di label/resi paket.
+// lihat middleware.MaskPatientData) untuk potongan bukti pesanan yang dibawa
+// pasien. Bagian label yang ditempel di paket tetap memakai data tersamar.
 func (h *OrderHandler) Labels(c *fiber.Ctx) error {
 	var req struct {
 		IDs []uint `json:"ids"`

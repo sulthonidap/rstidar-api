@@ -1,6 +1,6 @@
 // Package privacy menyamarkan data pasien (masking) sebelum dikirim ke panel.
 // Data lengkap hanya keluar lewat aplikasi kurir (untuk order miliknya) dan
-// endpoint label/resi.
+// potongan bukti pesanan di label (untuk pasien).
 package privacy
 
 import (

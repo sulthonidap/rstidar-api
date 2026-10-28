@@ -11,7 +11,8 @@ import (
 // MaskPatientData menyamarkan data pasien di setiap respons JSON panel, untuk
 // semua role (termasuk Admin). Dikecualikan:
 //   - /api/courier/...  aplikasi kurir: data lengkap untuk order miliknya
-//   - /api/orders/labels  label/resi: dicetak lengkap untuk ditempel di paket
+//   - /api/orders/labels  cetak label: data lengkap untuk potongan bukti pesanan
+//     yang dibawa pasien (label paketnya sendiri tetap tersamar, diatur di panel)
 //
 // Ekspor Excel dan notifikasi realtime disamarkan di handler-nya masing-masing.
 // Pasang setelah RequireAuth.
