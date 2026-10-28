@@ -9,6 +9,7 @@ import (
 
 	"medsend-api/internal/enums"
 	"medsend-api/internal/models"
+	"medsend-api/internal/privacy"
 	"medsend-api/internal/realtime"
 	"medsend-api/internal/routing"
 	"medsend-api/internal/services"
@@ -228,9 +229,9 @@ func (h *PublicHandler) Track(c *fiber.Ctx) error {
 		"organization":    org,
 		"service_name":    serviceName,
 		"price":           order.Price,
-		"customer_name":   order.CustomerName,
+		"customer_name":   privacy.Name(order.CustomerName),
 		"customer_phone":  maskPhone(order.CustomerPhone),
-		"dropoff_address": order.DropoffAddress,
+		"dropoff_address": privacy.Address(order.DropoffAddress),
 		"courier_name":    courierName,
 		"scheduled_date":  order.ScheduledDate,
 		"scheduled_slot":  order.ScheduledSlot,

@@ -9,6 +9,7 @@ import (
 
 	"medsend-api/internal/middleware"
 	"medsend-api/internal/models"
+	"medsend-api/internal/privacy"
 )
 
 // CustomerHandler — saved recipients of the partner RS.
@@ -164,6 +165,14 @@ func (h *CustomerHandler) Update(c *fiber.Ctx) error {
 	var req customerRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "payload tidak valid")
+	}
+	// The panel shows saved customers masked; unchanged fields keep the real value.
+	if err := restoreMasked([]maskedField{
+		{&req.Name, customer.Name, privacy.Name, "Nama"},
+		{&req.Phone, customer.Phone, privacy.Phone, "Nomor HP"},
+		{&req.Address, customer.Address, privacy.Address, "Alamat"},
+	}); err != nil {
+		return err
 	}
 	if err := req.validate(); err != nil {
 		return err

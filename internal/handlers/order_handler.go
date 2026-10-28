@@ -12,6 +12,7 @@ import (
 	"medsend-api/internal/enums"
 	"medsend-api/internal/middleware"
 	"medsend-api/internal/models"
+	"medsend-api/internal/privacy"
 	"medsend-api/internal/realtime"
 	"medsend-api/internal/routing"
 	"medsend-api/internal/services"
@@ -243,6 +244,28 @@ func (h *OrderHandler) Show(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": order})
 }
 
+// Labels — POST /api/orders/labels {ids}: data order LENGKAP (tidak disamarkan,
+// lihat middleware.MaskPatientData) khusus untuk dicetak di label/resi paket.
+func (h *OrderHandler) Labels(c *fiber.Ctx) error {
+	var req struct {
+		IDs []uint `json:"ids"`
+	}
+	if err := c.BodyParser(&req); err != nil || len(req.IDs) == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "pilih order yang mau dicetak")
+	}
+	if len(req.IDs) > 200 {
+		return fiber.NewError(fiber.StatusBadRequest, "maksimal 200 label sekali cetak")
+	}
+	var orders []models.Order
+	err := orderPreload(h.DB).Preload("Transaction").
+		Where("id IN ? AND status <> ?", req.IDs, enums.OrderStatusCancelled).
+		Order("id").Find(&orders).Error
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(fiber.Map{"data": orders})
+}
+
 type storeOrderRequest struct {
 	ServiceID      uint    `json:"service_id" validate:"required"`
 	CustomerName   string  `json:"customer_name" validate:"required"`
@@ -267,6 +290,19 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	var req storeOrderRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "payload tidak valid")
+	}
+	// A picked saved customer fills the form with masked data; use the real values.
+	if req.CustomerID != nil {
+		var saved models.Customer
+		if h.DB.First(&saved, *req.CustomerID).Error == nil {
+			if err := restoreMasked([]maskedField{
+				{&req.CustomerName, saved.Name, privacy.Name, "Nama penerima"},
+				{&req.CustomerPhone, saved.Phone, privacy.Phone, "Nomor HP"},
+				{&req.DropoffAddress, saved.Address, privacy.Address, "Alamat tujuan"},
+			}); err != nil {
+				return err
+			}
+		}
 	}
 	if err := validateOrderFields(req.ServiceID, &req.CustomerName, &req.CustomerPhone,
 		&req.PickupAddress, &req.DropoffAddress, req.Notes); err != nil {

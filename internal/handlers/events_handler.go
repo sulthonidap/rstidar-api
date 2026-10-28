@@ -11,6 +11,7 @@ import (
 	"medsend-api/internal/enums"
 	"medsend-api/internal/middleware"
 	"medsend-api/internal/models"
+	"medsend-api/internal/privacy"
 	"medsend-api/internal/realtime"
 )
 
@@ -81,7 +82,7 @@ func publishOrderEvent(hub *realtime.Hub, eventType string, order *models.Order,
 		Status:           order.Status,
 		OrganizationID:   order.OrganizationID,
 		OrganizationName: orgName,
-		CustomerName:     order.CustomerName,
+		CustomerName:     privacy.Name(order.CustomerName), // notifikasi panel ikut disamarkan
 		Source:           string(order.Source),
 		ActorID:          actorID,
 		CreatedAt:        order.CreatedAt,

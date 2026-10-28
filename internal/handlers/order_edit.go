@@ -11,6 +11,7 @@ import (
 	"medsend-api/internal/enums"
 	"medsend-api/internal/middleware"
 	"medsend-api/internal/models"
+	"medsend-api/internal/privacy"
 )
 
 // editableStatuses: an order can be corrected until the courier has the package.
@@ -53,6 +54,16 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 	}
 	if strings.TrimSpace(req.PickupAddress) == "" {
 		req.PickupAddress = order.PickupAddress // not on the form: keep it
+	}
+	// The form shows masked patient data; unchanged fields keep the real value.
+	if err := restoreMasked([]maskedField{
+		{&req.CustomerName, order.CustomerName, privacy.Name, "Nama penerima"},
+		{&req.CustomerPhone, order.CustomerPhone, privacy.Phone, "Nomor HP"},
+		{&req.DropoffAddress, order.DropoffAddress, privacy.Address, "Alamat tujuan"},
+		{req.PatientName, derefString(order.PatientName), privacy.Name, "Nama pasien"},
+		{req.MedicalRecordNo, derefString(order.MedicalRecordNo), privacy.MedicalRecordNo, "No. RM"},
+	}); err != nil {
+		return err
 	}
 	if err := validateOrderFields(req.ServiceID, &req.CustomerName, &req.CustomerPhone,
 		&req.PickupAddress, &req.DropoffAddress, req.Notes); err != nil {

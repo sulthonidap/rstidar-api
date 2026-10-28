@@ -55,7 +55,8 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	api.Post("/courier/login", authH.CourierLogin) // aplikasi kurir
 
 	// --- Butuh login ---
-	auth := api.Group("", middleware.RequireAuth(db, jwtSecret))
+	// Data pasien disamarkan di semua respons panel (kecuali aplikasi kurir & label).
+	auth := api.Group("", middleware.RequireAuth(db, jwtSecret), middleware.MaskPatientData())
 	auth.Get("/auth/me", authH.Me)
 	// Live "order baru" notifications (Server-Sent Events) — only the CCO of the
 	// ordering RS validates new orders, so only CCOs subscribe.
@@ -84,6 +85,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	staff := []enums.UserRole{enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi, enums.RoleOps, enums.RoleFinance}
 	orders.Get("/", admin(staff...), orderH.Index)
 	orders.Get("/stats", admin(staff...), orderH.Stats)
+	orders.Post("/labels", admin(staff...), orderH.Labels) // data lengkap untuk resi (tidak disamarkan)
 	orders.Get("/:id", admin(staff...), orderH.Show)
 	orders.Post("/", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi), orderH.Store)
 	orders.Put("/:id", admin(enums.RoleAdmin, enums.RoleCco), orderH.Update)
