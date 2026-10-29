@@ -51,6 +51,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	pub.Get("/orders/:code", pubH.Track)
 	pub.Get("/regions/area", compress.New(), regionH.Area)                                  // garis wilayah layanan untuk peta form order
 	pub.Get("/regions", regionH.Public)                                                     // wilayah layanan untuk dropdown alamat (kab → kec → kel)
+	pub.Get("/free-program", settingsH.PublicFreeProgram)                                   // kategori pasien (ongkir gratis) di form publik/kiosk
 	pub.Get("/pharmacy", settingsH.PublicPharmacy)                                          // farmasi di form publik/kiosk (+ bangsal aktif)
 	pub.Get("/payment-info", settingsH.PublicPayment)                                       // rekening & QRIS untuk non-tunai
 	pub.Post("/quote", pubH.Quote)                                                          // estimasi harga + jarak jalan untuk form order

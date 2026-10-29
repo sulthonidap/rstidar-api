@@ -76,6 +76,8 @@ type publicOrderRequest struct {
 	pharmacyInput
 	// Kelurahan/desa tujuan: wajib, di dalam wilayah layanan.
 	regionInput
+	// Program ongkir gratis: the patient's own claim, while the Admin turned it on.
+	publicFreeInput
 	// cash (tunai di kasir RS) | noncash (transfer/QRIS, dicek CCO)
 	PaymentMethod string `json:"payment_method"`
 }
@@ -153,6 +155,15 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
 		return err
 	}
+	note := "Order dibuat via form publik"
+	if loadFreeProgram(h.DB).Public {
+		if err := req.publicFreeInput.apply(&order); err != nil {
+			return err
+		}
+		if order.PatientCategory != enums.PatientUmum {
+			note += ". " + freeClaimNote(&order)
+		}
+	}
 
 	err = h.DB.Transaction(func(tx *gorm.DB) error {
 		// The patient goes into the customer list, so staff can reuse their details
@@ -169,7 +180,6 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		if err := openTransaction(tx, &order, paymentMethod); err != nil {
 			return err
 		}
-		note := "Order dibuat via form publik"
 		return tx.Create(&models.OrderStatusHistory{
 			OrderID:   order.ID,
 			ToStatus:  enums.OrderStatusPending,

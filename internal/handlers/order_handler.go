@@ -384,11 +384,14 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	if err := req.pharmacyInput.apply(h.DB, &order, true); err != nil {
 		return err
 	}
-	// Program ongkir gratis: the staff checked the patient's category & domicile.
-	if err := req.freeInput.apply(&order); err != nil {
-		return err
-	}
+	// Program ongkir gratis: the staff checked the patient's category & domicile
+	// (only while it's on for the staff form).
 	program := loadFreeProgram(h.DB)
+	if program.Enabled {
+		if err := req.freeInput.apply(&order); err != nil {
+			return err
+		}
+	}
 	applyFree(program, &order, user.ID)
 	if order.IsFree {
 		note = "Order dibuat. " + freeNote(program, &order)

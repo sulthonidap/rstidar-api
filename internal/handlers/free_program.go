@@ -13,10 +13,13 @@ import (
 
 // Program ongkir gratis: pasien lansia/disabilitas yang domisilinya (mis. Kota
 // Magelang) sudah dicek petugas dari KTP tidak membayar ongkir. Petugaslah yang
-// memverifikasi — form publik tidak bisa memilih gratis. Admin menyalakan
-// program dan menulis syarat domisilinya di Pengaturan.
+// memverifikasi. Admin menyalakannya terpisah untuk form petugas (enabled) dan
+// form pasien & kiosk (public), dan menulis syarat domisilinya di Pengaturan.
+// Dari form pasien, kategori cuma pengajuan: gratis setelah CCO mengecek KTP-nya
+// lewat Edit order.
 const (
 	setFreeEnabled      = "free_program.enabled"
+	setFreePublic       = "free_program.public"
 	setFreeDomicile     = "free_program.domicile"
 	defaultFreeDomicile = "Kota Magelang"
 	// Catatan transaksi yang dilunasi otomatis karena gratis; dikenali lagi saat
@@ -25,13 +28,17 @@ const (
 )
 
 type freeProgram struct {
-	Enabled  bool   `json:"enabled"`
+	Enabled  bool   `json:"enabled"`  // di form order petugas
+	Public   bool   `json:"public"`   // di form pasien & kiosk (pengajuan)
 	Domicile string `json:"domicile"` // syarat domisili, mis. "Kota Magelang"
 }
 
+// active: the program runs on either form, so CCO can verify a claim.
+func (p freeProgram) active() bool { return p.Enabled || p.Public }
+
 func loadFreeProgram(db *gorm.DB) freeProgram {
 	var rows []models.AppSetting
-	db.Where("name IN ?", []string{setFreeEnabled, setFreeDomicile}).Find(&rows)
+	db.Where("name IN ?", []string{setFreeEnabled, setFreePublic, setFreeDomicile}).Find(&rows)
 	p := freeProgram{Domicile: defaultFreeDomicile}
 	for _, r := range rows {
 		if r.Value == nil {
@@ -40,6 +47,8 @@ func loadFreeProgram(db *gorm.DB) freeProgram {
 		switch r.Name {
 		case setFreeEnabled:
 			p.Enabled = *r.Value == "1"
+		case setFreePublic:
+			p.Public = *r.Value == "1"
 		case setFreeDomicile:
 			if v := strings.TrimSpace(*r.Value); v != "" {
 				p.Domicile = v
@@ -79,7 +88,26 @@ func (in freeInput) apply(o *models.Order) error {
 
 // eligible: program aktif, pasien lansia/disabilitas, dan domisilinya sudah dicek.
 func (p freeProgram) eligible(o *models.Order) bool {
-	return p.Enabled && o.PatientCategory != enums.PatientUmum && o.DomicileChecked
+	return p.active() && o.PatientCategory != enums.PatientUmum && o.DomicileChecked
+}
+
+// publicFreeInput: kategori yang dipilih pasien sendiri di form pasien/kiosk —
+// pengajuan, belum dicek petugas, jadi belum gratis.
+type publicFreeInput struct {
+	PatientCategory *string `json:"patient_category"`
+}
+
+func (in publicFreeInput) apply(o *models.Order) error {
+	if err := (freeInput{PatientCategory: in.PatientCategory}).apply(o); err != nil {
+		return err
+	}
+	o.DomicileChecked = false
+	return nil
+}
+
+// freeClaimNote untuk riwayat order publik: "Pasien mengajukan ongkir gratis (Lansia), perlu dicek petugas".
+func freeClaimNote(o *models.Order) string {
+	return "Pasien mengajukan ongkir gratis (" + o.PatientCategory.Label() + "), perlu dicek petugas"
 }
 
 // applyFree dipanggil setelah applyPrice (o.Price = tarif): order gratis
@@ -160,12 +188,17 @@ func (h *SettingsHandler) UpdateFreeProgram(c *fiber.Ctx) error {
 	if len(req.Domicile) > 100 {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "syarat domisili terlalu panjang")
 	}
-	enabled := "0"
-	if req.Enabled {
-		enabled = "1"
+	flag := func(on bool) string {
+		if on {
+			return "1"
+		}
+		return "0"
 	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := h.set(tx, setFreeEnabled, enabled); err != nil {
+		if err := h.set(tx, setFreeEnabled, flag(req.Enabled)); err != nil {
+			return err
+		}
+		if err := h.set(tx, setFreePublic, flag(req.Public)); err != nil {
 			return err
 		}
 		return h.set(tx, setFreeDomicile, req.Domicile)
@@ -174,4 +207,11 @@ func (h *SettingsHandler) UpdateFreeProgram(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(fiber.Map{"data": loadFreeProgram(h.DB)})
+}
+
+// PublicFreeProgram — GET /api/public/free-program: whether the public form &
+// kiosk ask for the patient category, and the domicile requirement to show.
+func (h *SettingsHandler) PublicFreeProgram(c *fiber.Ctx) error {
+	p := loadFreeProgram(h.DB)
+	return c.JSON(fiber.Map{"data": fiber.Map{"enabled": p.Public, "domicile": p.Domicile}})
 }

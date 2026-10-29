@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -112,3 +113,107 @@ func TestFreeDeliveryProgram(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// Separate switches: the staff form (enabled) and the public form & kiosk
+// (public). A patient's own pick is a claim CCO verifies by Edit.
+func TestFreeProgramSwitches(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.Role{}, &models.Organization{}, &models.User{}, &models.Courier{},
+		&models.Service{}, &models.ServiceTier{}, &models.Customer{}, &models.Order{},
+		&models.OrderStatusHistory{}, &models.Transaction{}, &models.OrderDelivery{}, &models.AppSetting{}, &models.Ward{}, &models.Region{}); err != nil {
+		t.Fatal(err)
+	}
+	db.Create(&models.Organization{Name: "RSUD Tidar"})
+	seedRegions(db)
+	svc := models.Service{Name: "Reguler", PriceBase: 12000, IsActive: true}
+	db.Create(&svc)
+	cco := models.User{Name: "CCO", Email: "cco@test", Password: "x", IsActive: true}
+	db.Create(&cco)
+
+	h := NewOrderHandler(db, nil, nil, nil)
+	pub := &PublicHandler{DB: db}
+	settings := &SettingsHandler{DB: db}
+	app := fiber.New()
+	app.Post("/public/orders", pub.StoreOrder)
+	app.Get("/public/free-program", settings.PublicFreeProgram)
+	api := app.Group("/api", func(c *fiber.Ctx) error {
+		c.Locals(middleware.UserContextKey, &cco)
+		return c.Next()
+	})
+	api.Post("/orders", h.Store)
+	api.Put("/orders/:id", h.Update)
+
+	call := func(method, path string, body map[string]any) (int, string) {
+		t.Helper()
+		raw, _ := json.Marshal(body)
+		req := httptest.NewRequest(method, path, strings.NewReader(string(raw)))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := app.Test(req, -1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(out)
+	}
+	body := func(extra map[string]any) map[string]any {
+		b := map[string]any{
+			"service_id": svc.ID, "customer_name": "Budi", "customer_phone": "081234567890",
+			"dropoff_address": "Jl. Pemuda 12, Magelang", "patient_name": "Budi", "medical_record_no": "RM1",
+			"payment_method": "cash", "dropoff_region_code": "33.71.01.1010",
+			"care_type": "rawat_jalan", "pharmacy_queue_no": "A-001",
+		}
+		for k, v := range extra {
+			b[k] = v
+		}
+		return b
+	}
+	last := func() models.Order {
+		var o models.Order
+		db.Order("id DESC").First(&o)
+		return o
+	}
+	staffFree := map[string]any{"patient_category": "lansia", "domicile_checked": true}
+
+	// Only the public switch on.
+	db.Create(&models.AppSetting{Name: setFreePublic, Value: ptr("1")})
+	if _, out := call("GET", "/public/free-program", nil); !strings.Contains(out, `"enabled":true`) {
+		t.Fatalf("public form must see the program: %s", out)
+	}
+	// The staff form is off: its category is ignored.
+	if code, out := call("POST", "/api/orders", body(staffFree)); code != 201 {
+		t.Fatalf("staff create: %d %s", code, out)
+	}
+	if o := last(); o.IsFree || o.PatientCategory != enums.PatientUmum {
+		t.Fatalf("staff switch off must ignore the category: %+v", o)
+	}
+	// A patient's claim (even saying checked) stays unverified and pays.
+	if code, out := call("POST", "/public/orders", body(map[string]any{"patient_category": "disabilitas", "domicile_checked": true})); code != 201 {
+		t.Fatalf("public create: %d %s", code, out)
+	}
+	claim := last()
+	if claim.IsFree || claim.PatientCategory != enums.PatientDisabilitas || claim.DomicileChecked || claim.Price != 12000 {
+		t.Fatalf("a claim must wait for CCO: %+v", claim)
+	}
+	var hist models.OrderStatusHistory
+	db.Where("order_id = ?", claim.ID).First(&hist)
+	if hist.Note == nil || !strings.Contains(*hist.Note, "mengajukan ongkir gratis (Disabilitas)") {
+		t.Fatalf("history must flag the claim: %v", hist.Note)
+	}
+	// CCO checks the KTP and confirms → free.
+	if code, out := call("PUT", "/api/orders/"+strconv.Itoa(int(claim.ID)), body(map[string]any{"patient_category": "disabilitas", "domicile_checked": true})); code != 200 {
+		t.Fatalf("verify: %d %s", code, out)
+	}
+	if o := last(); !o.IsFree || o.Price != 0 {
+		t.Fatalf("verified claim must be free: %+v", o)
+	}
+
+	// Public switch off: the category from the public form is ignored.
+	db.Model(&models.AppSetting{}).Where("name = ?", setFreePublic).Update("value", "0")
+	call("POST", "/public/orders", body(map[string]any{"patient_category": "lansia"}))
+	if o := last(); o.PatientCategory != enums.PatientUmum {
+		t.Fatalf("public switch off must ignore the category: %+v", o)
+	}
+}
