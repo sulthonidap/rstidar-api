@@ -145,6 +145,7 @@ func TestFreeProgramSwitches(t *testing.T) {
 	})
 	api.Post("/orders", h.Store)
 	api.Put("/orders/:id", h.Update)
+	api.Post("/orders/:id/free-claim", h.FreeClaim)
 
 	call := func(method, path string, body map[string]any) (int, string) {
 		t.Helper()
@@ -202,12 +203,37 @@ func TestFreeProgramSwitches(t *testing.T) {
 	if hist.Note == nil || !strings.Contains(*hist.Note, "mengajukan ongkir gratis (Disabilitas)") {
 		t.Fatalf("history must flag the claim: %v", hist.Note)
 	}
-	// CCO checks the KTP and confirms → free.
-	if code, out := call("PUT", "/api/orders/"+strconv.Itoa(int(claim.ID)), body(map[string]any{"patient_category": "disabilitas", "domicile_checked": true})); code != 200 {
-		t.Fatalf("verify: %d %s", code, out)
+	claimURL := func(id uint) string { return "/api/orders/" + strconv.Itoa(int(id)) + "/free-claim" }
+	// CCO checks the KTP and approves → free, settled at Rp0.
+	if code, out := call("POST", claimURL(claim.ID), map[string]any{"action": "approve"}); code != 200 {
+		t.Fatalf("approve: %d %s", code, out)
 	}
-	if o := last(); !o.IsFree || o.Price != 0 {
-		t.Fatalf("verified claim must be free: %+v", o)
+	if o := last(); !o.IsFree || o.Price != 0 || !o.DomicileChecked || o.FreeVerifiedBy == nil {
+		t.Fatalf("approved claim must be free: %+v", o)
+	}
+	var txn models.Transaction
+	db.Where("order_id = ?", claim.ID).First(&txn)
+	if txn.PaymentStatus != enums.PaymentStatusPaid || txn.Amount != 0 {
+		t.Fatalf("approved claim must be settled at Rp0: %+v", txn)
+	}
+	// Decided already: no second decision.
+	if code, _ := call("POST", claimURL(claim.ID), map[string]any{"action": "reject"}); code != 422 {
+		t.Fatalf("a decided claim must be refused, got %d", code)
+	}
+
+	// Rejected (with a reason): a regular order, still to pay, reason in the history.
+	call("POST", "/public/orders", body(map[string]any{"patient_category": "lansia"}))
+	rejected := last()
+	if code, out := call("POST", claimURL(rejected.ID), map[string]any{"action": "reject", "note": "KTP Kab. Semarang"}); code != 200 {
+		t.Fatalf("reject: %d %s", code, out)
+	}
+	if o := last(); o.IsFree || o.PatientCategory != enums.PatientUmum || o.Price != 12000 {
+		t.Fatalf("rejected claim must be a regular order: %+v", o)
+	}
+	var rejNote models.OrderStatusHistory
+	db.Where("order_id = ?", rejected.ID).Order("id DESC").First(&rejNote)
+	if rejNote.Note == nil || *rejNote.Note != "Pengajuan ongkir gratis (Lansia) ditolak. Catatan: KTP Kab. Semarang" {
+		t.Fatalf("history must record the rejection: %v", rejNote.Note)
 	}
 
 	// Public switch off: the category from the public form is ignored.

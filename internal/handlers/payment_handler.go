@@ -180,6 +180,10 @@ func checkCancelPayment(db *gorm.DB, order *models.Order, payment cancelPayment,
 	if db.Where("order_id = ? AND payment_status = ?", order.ID, enums.PaymentStatusPaid).Limit(1).Find(&txn).RowsAffected == 0 {
 		return nil, nil
 	}
+	// Settled at Rp0 because it was free (program ongkir gratis): no money to refund.
+	if paidBecauseFree(txn) {
+		return nil, nil
+	}
 	switch payment {
 	case cancelRefund:
 	case cancelKeep:

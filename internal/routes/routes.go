@@ -105,6 +105,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	orders.Get("/:id/assignable-couriers", admin(enums.RoleAdmin, enums.RoleOps), orderH.AssignableCouriers)
 	// Pembayaran: CCO tandai lunas (Finance/Admin juga), refund Finance/Admin.
 	orders.Post("/:id/payment", admin(enums.RoleAdmin, enums.RoleFinance, enums.RoleCco), orderH.Payment)
+	orders.Post("/:id/free-claim", admin(enums.RoleAdmin, enums.RoleCco), orderH.FreeClaim) // pengajuan ongkir gratis dari form pasien
 
 	// Pengaturan pembayaran (rekening & QRIS): Admin
 	settings := auth.Group("/settings", admin(enums.RoleAdmin))

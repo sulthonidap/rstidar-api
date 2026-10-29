@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"medsend-api/internal/enums"
+	"medsend-api/internal/middleware"
 	"medsend-api/internal/models"
 )
 
@@ -16,7 +17,7 @@ import (
 // memverifikasi. Admin menyalakannya terpisah untuk form petugas (enabled) dan
 // form pasien & kiosk (public), dan menulis syarat domisilinya di Pengaturan.
 // Dari form pasien, kategori cuma pengajuan: gratis setelah CCO mengecek KTP-nya
-// lewat Edit order.
+// lalu menyetujuinya (FreeClaim).
 const (
 	setFreeEnabled      = "free_program.enabled"
 	setFreePublic       = "free_program.public"
@@ -214,4 +215,87 @@ func (h *SettingsHandler) UpdateFreeProgram(c *fiber.Ctx) error {
 func (h *SettingsHandler) PublicFreeProgram(c *fiber.Ctx) error {
 	p := loadFreeProgram(h.DB)
 	return c.JSON(fiber.Map{"data": fiber.Map{"enabled": p.Public, "domicile": p.Domicile}})
+}
+
+// isFreeClaim: the patient asked for free delivery on the public form/kiosk and
+// nobody has decided yet.
+func isFreeClaim(o *models.Order) bool {
+	return o.PatientCategory != "" && o.PatientCategory != enums.PatientUmum && !o.DomicileChecked && !o.IsFree
+}
+
+type freeClaimRequest struct {
+	Action string  `json:"action"` // approve | reject
+	Note   *string `json:"note"`
+}
+
+// FreeClaim — POST /api/orders/:id/free-claim {action, note} (CCO/Admin): the
+// CCO checks the patient's KTP and decides the claim — approve makes the order
+// free (paid Rp0), reject turns it into a regular (umum) order. Written to the
+// status history.
+func (h *OrderHandler) FreeClaim(c *fiber.Ctx) error {
+	user := middleware.CurrentUser(c)
+	var order models.Order
+	if err := h.DB.First(&order, "id = ?", c.Params("id")).Error; err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "order tidak ditemukan")
+	}
+	if !isFreeClaim(&order) {
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "order ini tidak sedang mengajukan ongkir gratis")
+	}
+	if order.Status.IsFinal() {
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "order sudah selesai/batal")
+	}
+	var req freeClaimRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "payload tidak valid")
+	}
+	note := ""
+	if req.Note != nil {
+		note = strings.TrimSpace(*req.Note)
+	}
+	if len([]rune(note)) > 150 {
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "catatan maksimal 150 karakter")
+	}
+
+	program := loadFreeProgram(h.DB)
+	var history string
+	switch req.Action {
+	case "approve":
+		if !program.active() {
+			return fiber.NewError(fiber.StatusUnprocessableEntity, "program ongkir gratis sedang dimatikan Admin")
+		}
+		if paidByPatient(h.DB, order.ID) {
+			return fiber.NewError(fiber.StatusUnprocessableEntity,
+				"pasien sudah membayar "+rupiah(order.Price)+": refund dulu kalau ongkirnya memang digratiskan")
+		}
+		order.DomicileChecked = true
+		applyFree(program, &order, user.ID)
+		history = freeNote(program, &order)
+	case "reject":
+		history = "Pengajuan ongkir gratis (" + order.PatientCategory.Label() + ") ditolak"
+		order.PatientCategory, order.DomicileChecked = enums.PatientUmum, false
+	default:
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "aksi tidak dikenal")
+	}
+	if note != "" {
+		history += ". Catatan: " + note
+	}
+
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		if err := syncFreePayment(tx, &order, user.ID); err != nil {
+			return err
+		}
+		// Same from/to status marks an edit, not a step.
+		return tx.Create(&models.OrderStatusHistory{
+			OrderID: order.ID, FromStatus: &order.Status, ToStatus: order.Status,
+			ChangedBy: &user.ID, Note: &history, ChangedAt: time.Now(),
+		}).Error
+	})
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+	orderPreload(h.DB).First(&order, order.ID)
+	return c.JSON(fiber.Map{"data": order})
 }
