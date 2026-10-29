@@ -121,7 +121,8 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 		changed = append(changed, "alamat tujuan")
 	}
 	// The form sends the destination point it shows (null = none).
-	if !samePoint(dropoffLat, dropoffLng, order.DropoffLat, order.DropoffLng) {
+	pointMoved := !samePoint(dropoffLat, dropoffLng, order.DropoffLat, order.DropoffLng)
+	if pointMoved {
 		order.DropoffLat, order.DropoffLng = dropoffLat, dropoffLng
 		changed = append(changed, "titik tujuan")
 	}
@@ -138,7 +139,7 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 		changed = append(changed, "data pasien")
 	}
 	oldRegion := derefString(order.DropoffRegionCode)
-	if err := req.regionInput.apply(h.DB, &order, false); err != nil {
+	if err := req.regionInput.apply(h.DB, &order, false, pointMoved); err != nil {
 		return err
 	}
 	if derefString(order.DropoffRegionCode) != oldRegion {
@@ -239,8 +240,13 @@ func (h *OrderHandler) Coordinates(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "titik peta harus di wilayah Indonesia")
 	}
 
+	pointMoved := !samePoint(req.DropoffLat, req.DropoffLng, order.DropoffLat, order.DropoffLng)
 	order.PickupLat, order.PickupLng = req.PickupLat, req.PickupLng
 	order.DropoffLat, order.DropoffLng = req.DropoffLat, req.DropoffLng
+	// A moved destination point may lie in another kelurahan/desa (or outside the area).
+	if err := (regionInput{DropoffRegionCode: order.DropoffRegionCode}).apply(h.DB, &order, false, pointMoved); err != nil {
+		return err
+	}
 	// A moved point changes the distance, so the price — unless it's paid: fixing
 	// a misplaced pin then keeps the price the patient already paid.
 	var service models.Service
@@ -249,9 +255,11 @@ func (h *OrderHandler) Coordinates(c *fiber.Ctx) error {
 			return err
 		}
 	}
-	err := h.DB.Model(&order).Select("pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng", "price", "distance_km", "distance_source").Updates(models.Order{
+	err := h.DB.Model(&order).Select("pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng", "dropoff_region_code", "dropoff_region",
+		"price", "distance_km", "distance_source").Updates(models.Order{
 		PickupLat: order.PickupLat, PickupLng: order.PickupLng,
 		DropoffLat: order.DropoffLat, DropoffLng: order.DropoffLng,
+		DropoffRegionCode: order.DropoffRegionCode, DropoffRegion: order.DropoffRegion,
 		Price: order.Price, DistanceKm: order.DistanceKm, DistanceSource: order.DistanceSource,
 	}).Error
 	if err != nil {

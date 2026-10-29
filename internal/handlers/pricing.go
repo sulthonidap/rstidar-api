@@ -18,6 +18,8 @@ import (
 const (
 	distanceRoad     = "road"
 	distanceEstimate = "estimate"
+	// No map point: measured to the centre of the order's kelurahan/desa.
+	distanceRegion = "region"
 )
 
 // measure: road distance (and the route's shape) between two points from the
@@ -35,16 +37,28 @@ func measure(ctx context.Context, router routing.Router, fromLat, fromLng, toLat
 }
 
 // measureOrder sets the order's distance (RS pickup point → destination, by
-// road); nil without both points.
+// road). Without a destination point it measures to the centre of the order's
+// kelurahan/desa ("region"); nil when neither is known.
 func measureOrder(ctx context.Context, db *gorm.DB, router routing.Router, order *models.Order) {
 	pickupLat, pickupLng := order.PickupLat, order.PickupLng
 	if pickupLat == nil || pickupLng == nil {
 		pickupLat, pickupLng = rsPoint(db, order.OrganizationID)
 	}
 	order.DistanceKm, order.DistanceSource = nil, nil
-	if pickupLat != nil && pickupLng != nil && order.DropoffLat != nil && order.DropoffLng != nil {
+	if pickupLat == nil || pickupLng == nil {
+		return
+	}
+	if order.DropoffLat != nil && order.DropoffLng != nil {
 		km, source, _ := measure(ctx, router, *pickupLat, *pickupLng, *order.DropoffLat, *order.DropoffLng)
 		order.DistanceKm, order.DistanceSource = &km, &source
+		return
+	}
+	if order.DropoffRegionCode != nil {
+		if lat, lng, ok := regionCentre(db, *order.DropoffRegionCode); ok {
+			km, _, _ := measure(ctx, router, *pickupLat, *pickupLng, lat, lng)
+			source := distanceRegion
+			order.DistanceKm, order.DistanceSource = &km, &source
+		}
 	}
 }
 

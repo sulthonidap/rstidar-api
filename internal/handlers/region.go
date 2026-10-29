@@ -215,9 +215,20 @@ type regionInput struct {
 }
 
 // apply validates the region into o: a kelurahan/desa inside the service area.
-// An order keeps its region even after the Admin narrowed the area.
-func (in regionInput) apply(db *gorm.DB, o *models.Order, required bool) error {
+// o's destination point is set already. checkPoint (a new or moved point): the
+// point decides the kelurahan/desa (it's where the house really is), and a
+// point outside the mapped service area is refused. An order keeps its region
+// even after the Admin narrowed the area.
+func (in regionInput) apply(db *gorm.DB, o *models.Order, required, checkPoint bool) error {
 	code := trimOptional(in.DropoffRegionCode)
+	if checkPoint && o.DropoffLat != nil && o.DropoffLng != nil {
+		if found, ok := locateRegion(db, *o.DropoffLat, *o.DropoffLng); ok {
+			code = &found
+		} else if areaMapped(db, loadServiceArea(db)) {
+			return fiber.NewError(fiber.StatusUnprocessableEntity,
+				"titik lokasi tujuan di luar wilayah layanan, order tidak bisa dibuat")
+		}
+	}
 	if code == nil {
 		if required {
 			return fiber.NewError(fiber.StatusUnprocessableEntity, "pilih kelurahan/desa alamat tujuan")
@@ -236,8 +247,12 @@ func (in regionInput) apply(db *gorm.DB, o *models.Order, required bool) error {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 	if !inArea(loadServiceArea(db), *code) {
+		where := "alamat tujuan"
+		if strings.TrimSpace(derefString(in.DropoffRegionCode)) != *code { // found from the point
+			where = "titik lokasi tujuan"
+		}
 		return fiber.NewError(fiber.StatusUnprocessableEntity,
-			"alamat tujuan ("+label+") di luar wilayah layanan, order tidak bisa dibuat")
+			where+" ("+label+") di luar wilayah layanan, order tidak bisa dibuat")
 	}
 	o.DropoffRegionCode, o.DropoffRegion = code, &label
 	return nil

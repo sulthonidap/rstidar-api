@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"gorm.io/gorm"
 
 	"medsend-api/internal/enums"
@@ -154,6 +155,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 
 	// Semua wilayah (tanpa filter wilayah layanan): Admin, untuk mengatur wilayah layanan.
 	auth.Get("/regions", admin(enums.RoleAdmin), regionH.Index)
+	auth.Get("/regions/map", admin(enums.RoleAdmin), compress.New(), regionH.Map) // batas kelurahan (±1 MB, dikompres)
 
 	users := auth.Group("/users", admin(enums.RoleAdmin))
 	users.Get("/", userH.Index)

@@ -14,6 +14,8 @@ type quoteRequest struct {
 	// Pickup point, when it isn't the RS point (an order whose pickup was moved).
 	PickupLat *float64 `json:"pickup_lat"`
 	PickupLng *float64 `json:"pickup_lng"`
+	// Kelurahan/desa picked in the form: without a point, measured from its centre.
+	DropoffRegionCode *string `json:"dropoff_region_code"`
 }
 
 type serviceQuote struct {
@@ -54,6 +56,22 @@ func (h *PublicHandler) Quote(c *fiber.Ctx) error {
 	if req.PickupLat != nil {
 		order.PickupLat, order.PickupLng = req.PickupLat, req.PickupLng
 	}
+	order.DropoffRegionCode = trimOptional(req.DropoffRegionCode)
+
+	// Where the point lies: the form fills the kelurahan/desa from it, and holds
+	// back a point outside the service area (an order would be refused).
+	var pointRegion fiber.Map
+	outsideArea := false
+	if req.DropoffLat != nil && req.DropoffLng != nil {
+		area := loadServiceArea(h.DB)
+		if code, ok := locateRegion(h.DB, *req.DropoffLat, *req.DropoffLng); ok {
+			label, _ := regionLabel(h.DB, code)
+			pointRegion = fiber.Map{"code": code, "label": label, "in_area": inArea(area, code)}
+			outsideArea = !inArea(area, code)
+		} else {
+			outsideArea = areaMapped(h.DB, area)
+		}
+	}
 	measureOrder(c.UserContext(), h.DB, h.Router, &order)
 	quotes := make([]serviceQuote, 0, len(list))
 	for _, s := range list {
@@ -78,5 +96,7 @@ func (h *PublicHandler) Quote(c *fiber.Ctx) error {
 		"distance_km":     order.DistanceKm,
 		"distance_source": order.DistanceSource,
 		"services":        quotes,
+		"point_region":    pointRegion, // the point's kelurahan/desa (null = unknown / no point)
+		"outside_area":    outsideArea,
 	}})
 }

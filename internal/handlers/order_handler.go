@@ -374,10 +374,11 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	}
 	// Picked up at the RS: start from its map point.
 	order.PickupLat, order.PickupLng = org.Lat, org.Lng
-	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
+	// The region first: without a map point the distance is measured from its centre.
+	if err := req.regionInput.apply(h.DB, &order, true, true); err != nil {
 		return err
 	}
-	if err := req.regionInput.apply(h.DB, &order, true); err != nil {
+	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
 		return err
 	}
 	if err := req.pharmacyInput.apply(h.DB, &order, true); err != nil {

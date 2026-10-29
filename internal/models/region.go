@@ -11,3 +11,14 @@ type Region struct {
 }
 
 func (Region) TableName() string { return "regions" }
+
+// RegionBoundary is a kelurahan/desa outline: Path is JSON [[[lat,lng], ...], ...]
+// (outer rings and holes, read even-odd); Lat/Lng its centre.
+type RegionBoundary struct {
+	Code string  `gorm:"primaryKey;type:varchar(13)" json:"code"`
+	Lat  float64 `gorm:"not null" json:"lat"`
+	Lng  float64 `gorm:"not null" json:"lng"`
+	Path string  `gorm:"type:mediumtext;not null" json:"-"`
+}
+
+func (RegionBoundary) TableName() string { return "region_boundaries" }

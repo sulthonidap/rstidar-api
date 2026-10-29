@@ -142,7 +142,7 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		PickupLat: org.Lat,
 		PickupLng: org.Lng,
 	}
-	if err := req.regionInput.apply(h.DB, &order, true); err != nil {
+	if err := req.regionInput.apply(h.DB, &order, true, true); err != nil {
 		return err
 	}
 	if pharmacyOnPublicForm(h.DB) {
