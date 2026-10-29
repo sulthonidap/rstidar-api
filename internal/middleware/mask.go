@@ -22,7 +22,8 @@ func MaskPatientData() fiber.Handler {
 			return err
 		}
 		path := c.Path()
-		if strings.HasPrefix(path, "/api/courier/") || path == "/api/orders/labels" {
+		// Wilayah: no patient data, and the map comes compressed (unreadable here).
+		if strings.HasPrefix(path, "/api/courier/") || path == "/api/orders/labels" || strings.HasPrefix(path, "/api/regions") {
 			return nil
 		}
 		if !strings.HasPrefix(string(c.Response().Header.ContentType()), fiber.MIMEApplicationJSON) {
