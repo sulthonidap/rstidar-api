@@ -54,8 +54,8 @@ func (h *OrderHandler) Index(c *fiber.Ctx) error {
 	if search := strings.TrimSpace(c.Query("search")); search != "" {
 		like := likePattern(search)
 		query = query.Where(
-			"(code LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ? OR pharmacy_queue_no LIKE ?)",
-			like, like, like, like,
+			"(code LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ? OR pharmacy_queue_no LIKE ? OR dropoff_region LIKE ?)",
+			like, like, like, like, like,
 		)
 	}
 	query, err := filterCreatedDate(c, query)
@@ -281,6 +281,7 @@ type storeOrderRequest struct {
 	orderExtras
 	freeInput
 	pharmacyInput
+	regionInput
 	PaymentMethod string `json:"payment_method"` // cash | noncash
 }
 
@@ -376,6 +377,9 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	if err := applyPrice(c.UserContext(), h.DB, h.Router, service, &order); err != nil {
 		return err
 	}
+	if err := req.regionInput.apply(h.DB, &order, true); err != nil {
+		return err
+	}
 	if err := req.pharmacyInput.apply(h.DB, &order, true); err != nil {
 		return err
 	}
@@ -390,7 +394,7 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	}
 
 	err = h.DB.Transaction(func(tx *gorm.DB) error {
-		customerID, err := customerForOrder(tx, orgID, user.ID, &req)
+		customerID, err := customerForOrder(tx, orgID, user.ID, &req, order.DropoffRegionCode)
 		if err != nil {
 			return err
 		}

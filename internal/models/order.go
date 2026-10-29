@@ -33,10 +33,14 @@ type Order struct {
 	Ward            *Ward           `json:"ward,omitempty"`
 	PickupAddress   string          `gorm:"type:text;not null" json:"pickup_address"`
 	DropoffAddress  string          `gorm:"type:text;not null" json:"dropoff_address"`
-	PickupLat       *float64        `gorm:"type:decimal(10,7)" json:"pickup_lat"`
-	PickupLng       *float64        `gorm:"type:decimal(10,7)" json:"pickup_lng"`
-	DropoffLat      *float64        `gorm:"type:decimal(10,7)" json:"dropoff_lat"`
-	DropoffLng      *float64        `gorm:"type:decimal(10,7)" json:"dropoff_lng"`
+	// Kelurahan/desa tujuan (kode Kemendagri) dan labelnya saat order dibuat,
+	// mis. "Kel. Tidar Utara, Kec. Magelang Selatan, Kota Magelang".
+	DropoffRegionCode *string  `gorm:"type:varchar(13);index" json:"dropoff_region_code"`
+	DropoffRegion     *string  `gorm:"type:varchar(255)" json:"dropoff_region"`
+	PickupLat         *float64 `gorm:"type:decimal(10,7)" json:"pickup_lat"`
+	PickupLng         *float64 `gorm:"type:decimal(10,7)" json:"pickup_lng"`
+	DropoffLat        *float64 `gorm:"type:decimal(10,7)" json:"dropoff_lat"`
+	DropoffLng        *float64 `gorm:"type:decimal(10,7)" json:"dropoff_lng"`
 
 	ServiceID *uint    `json:"service_id"`
 	Service   *Service `json:"service,omitempty"`

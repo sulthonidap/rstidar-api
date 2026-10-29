@@ -32,6 +32,7 @@ type updateOrderRequest struct {
 	orderExtras
 	freeInput
 	pharmacyInput
+	regionInput
 }
 
 // Update — PUT /api/orders/:id (CCO/Admin). Corrects the order's details
@@ -135,6 +136,13 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 	if derefString(patientName) != derefString(order.PatientName) || derefString(medicalRecordNo) != derefString(order.MedicalRecordNo) {
 		order.PatientName, order.MedicalRecordNo = patientName, medicalRecordNo
 		changed = append(changed, "data pasien")
+	}
+	oldRegion := derefString(order.DropoffRegionCode)
+	if err := req.regionInput.apply(h.DB, &order, false); err != nil {
+		return err
+	}
+	if derefString(order.DropoffRegionCode) != oldRegion {
+		changed = append(changed, "wilayah tujuan")
 	}
 	oldPharmacy := pharmacyKey(&order)
 	if err := req.pharmacyInput.apply(h.DB, &order, false); err != nil {

@@ -34,6 +34,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	courierAppH := handlers.NewCourierAppHandler(db, store)
 	routesH := &handlers.CourierRoutesHandler{DB: db, Router: router}
 	wardH := &handlers.WardHandler{DB: db}
+	regionH := &handlers.RegionHandler{DB: db}
 
 	api := app.Group("/api")
 
@@ -47,6 +48,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	pub.Get("/organization", pubH.Organization) // profil RS untuk header form order
 	pub.Post("/orders", pubH.StoreOrder)
 	pub.Get("/orders/:code", pubH.Track)
+	pub.Get("/regions", regionH.Public)                                                     // wilayah layanan untuk dropdown alamat (kab → kec → kel)
 	pub.Get("/pharmacy", settingsH.PublicPharmacy)                                          // farmasi di form publik/kiosk (+ bangsal aktif)
 	pub.Get("/payment-info", settingsH.PublicPayment)                                       // rekening & QRIS untuk non-tunai
 	pub.Post("/quote", pubH.Quote)                                                          // estimasi harga + jarak jalan untuk form order
@@ -110,6 +112,8 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	settings.Get("/setup-checklist", settingsH.SetupChecklist) // checklist setup awal di panel
 	settings.Get("/pharmacy", settingsH.PharmacySettings)      // farmasi di form publik/kiosk
 	settings.Put("/pharmacy", settingsH.UpdatePharmacySettings)
+	settings.Get("/service-area", settingsH.ServiceArea) // wilayah layanan (kode Kemendagri)
+	settings.Put("/service-area", settingsH.UpdateServiceArea)
 	settings.Put("/free-program", settingsH.UpdateFreeProgram) // program ongkir gratis (lansia/disabilitas)
 	// Status program ongkir gratis untuk form order petugas.
 	auth.Get("/free-program", admin(staff...), settingsH.FreeProgram)
@@ -147,6 +151,9 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	wards.Post("/", admin(enums.RoleAdmin), wardH.Store)
 	wards.Put("/:id", admin(enums.RoleAdmin), wardH.Update)
 	wards.Delete("/:id", admin(enums.RoleAdmin), wardH.Destroy)
+
+	// Semua wilayah (tanpa filter wilayah layanan): Admin, untuk mengatur wilayah layanan.
+	auth.Get("/regions", admin(enums.RoleAdmin), regionH.Index)
 
 	users := auth.Group("/users", admin(enums.RoleAdmin))
 	users.Get("/", userH.Index)

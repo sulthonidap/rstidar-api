@@ -12,7 +12,8 @@ type Customer struct {
 	Name           string        `gorm:"not null" json:"name"`
 	Phone          string        `gorm:"not null" json:"phone"`
 	Address        string        `gorm:"type:text;not null" json:"address"`
-	Lat            *float64      `gorm:"type:decimal(10,7)" json:"lat"` // map point of the address, if known
+	RegionCode     *string       `gorm:"type:varchar(13)" json:"region_code"` // kelurahan/desa (kode Kemendagri)
+	Lat            *float64      `gorm:"type:decimal(10,7)" json:"lat"`       // map point of the address, if known
 	Lng            *float64      `gorm:"type:decimal(10,7)" json:"lng"`
 	Notes          *string       `gorm:"type:text" json:"notes"`
 	CreatedBy      *uint         `json:"created_by"`

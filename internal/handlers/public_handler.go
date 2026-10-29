@@ -74,6 +74,8 @@ type publicOrderRequest struct {
 	MedicalRecordNo *string `json:"medical_record_no"`
 	// Farmasi: asked (and required) only while the Admin turned it on.
 	pharmacyInput
+	// Kelurahan/desa tujuan: wajib, di dalam wilayah layanan.
+	regionInput
 	// cash (tunai di kasir RS) | noncash (transfer/QRIS, dicek CCO)
 	PaymentMethod string `json:"payment_method"`
 }
@@ -140,6 +142,9 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		PickupLat: org.Lat,
 		PickupLng: org.Lng,
 	}
+	if err := req.regionInput.apply(h.DB, &order, true); err != nil {
+		return err
+	}
 	if pharmacyOnPublicForm(h.DB) {
 		if err := req.pharmacyInput.apply(h.DB, &order, true); err != nil {
 			return err
@@ -154,7 +159,7 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		// for the next order. Best effort: never lose the order over it.
 		if id, err := rememberCustomer(tx, org.ID, nil, customerContact{
 			Name: order.CustomerName, Phone: order.CustomerPhone, Address: order.DropoffAddress,
-			Lat: order.DropoffLat, Lng: order.DropoffLng,
+			Lat: order.DropoffLat, Lng: order.DropoffLng, RegionCode: order.DropoffRegionCode,
 		}); err == nil {
 			order.CustomerID = id
 		}

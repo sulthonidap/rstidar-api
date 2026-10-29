@@ -23,10 +23,11 @@ func TestFreeDeliveryProgram(t *testing.T) {
 	}
 	if err := db.AutoMigrate(&models.Role{}, &models.Organization{}, &models.User{}, &models.Courier{},
 		&models.Service{}, &models.ServiceTier{}, &models.Customer{}, &models.Order{},
-		&models.OrderStatusHistory{}, &models.Transaction{}, &models.OrderDelivery{}, &models.AppSetting{}, &models.Ward{}); err != nil {
+		&models.OrderStatusHistory{}, &models.Transaction{}, &models.OrderDelivery{}, &models.AppSetting{}, &models.Ward{}, &models.Region{}); err != nil {
 		t.Fatal(err)
 	}
 	db.Create(&models.Organization{Name: "RSUD Tidar"})
+	seedRegions(db)
 	svc := models.Service{Name: "Reguler", PriceBase: 12000, IsActive: true}
 	db.Create(&svc)
 	cco := models.User{Name: "CCO", Email: "cco@test", Password: "x", IsActive: true}
@@ -57,7 +58,7 @@ func TestFreeDeliveryProgram(t *testing.T) {
 		return map[string]any{
 			"service_id": svc.ID, "customer_name": "Budi", "customer_phone": "081234567890",
 			"dropoff_address": "Jl. Pemuda 12, Magelang", "patient_name": "Budi", "medical_record_no": "RM1",
-			"payment_method": "cash", "patient_category": category, "domicile_checked": checked,
+			"payment_method": "cash", "dropoff_region_code": "33.71.01.1010", "patient_category": category, "domicile_checked": checked,
 			"care_type": "rawat_jalan", "pharmacy_queue_no": "A-001",
 		}
 	}

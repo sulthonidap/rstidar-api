@@ -223,6 +223,7 @@ func normalizePhone(phone string) string {
 type customerContact struct {
 	Name, Phone, Address string
 	Lat, Lng             *float64
+	RegionCode           *string // kelurahan/desa; nil = unknown, keep the saved one
 }
 
 // rememberCustomer finds the RS's customer with the same phone AND name — one
@@ -242,6 +243,9 @@ func rememberCustomer(tx *gorm.DB, orgID uint, createdBy *uint, ct customerConta
 		if ct.Lat != nil {
 			customer.Lat, customer.Lng = ct.Lat, ct.Lng
 		}
+		if ct.RegionCode != nil {
+			customer.RegionCode = ct.RegionCode
+		}
 		err = tx.Save(&customer).Error
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		customer = models.Customer{
@@ -251,6 +255,7 @@ func rememberCustomer(tx *gorm.DB, orgID uint, createdBy *uint, ct customerConta
 			Address:        ct.Address,
 			Lat:            ct.Lat,
 			Lng:            ct.Lng,
+			RegionCode:     ct.RegionCode,
 			CreatedBy:      createdBy,
 		}
 		err = tx.Create(&customer).Error
@@ -267,7 +272,7 @@ func rememberCustomer(tx *gorm.DB, orgID uint, createdBy *uint, ct customerConta
 //     time they can be picked from the list.
 //
 // Returns nil when neither applies.
-func customerForOrder(tx *gorm.DB, orgID uint, userID uint, req *storeOrderRequest) (*uint, error) {
+func customerForOrder(tx *gorm.DB, orgID uint, userID uint, req *storeOrderRequest, regionCode *string) (*uint, error) {
 	if req.CustomerID != nil {
 		var customer models.Customer
 		if err := tx.Where("id = ? AND organization_id = ?", *req.CustomerID, orgID).First(&customer).Error; err != nil {
@@ -280,6 +285,6 @@ func customerForOrder(tx *gorm.DB, orgID uint, userID uint, req *storeOrderReque
 	}
 	return rememberCustomer(tx, orgID, &userID, customerContact{
 		Name: req.CustomerName, Phone: req.CustomerPhone, Address: req.DropoffAddress,
-		Lat: req.DropoffLat, Lng: req.DropoffLng,
+		Lat: req.DropoffLat, Lng: req.DropoffLng, RegionCode: regionCode,
 	})
 }

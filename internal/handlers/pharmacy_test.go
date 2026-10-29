@@ -22,11 +22,12 @@ func TestOrderPharmacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(&models.Role{}, &models.Organization{}, &models.User{}, &models.Courier{},
-		&models.Service{}, &models.ServiceTier{}, &models.Customer{}, &models.Order{}, &models.Ward{},
+		&models.Service{}, &models.ServiceTier{}, &models.Customer{}, &models.Order{}, &models.Ward{}, &models.Region{},
 		&models.OrderStatusHistory{}, &models.Transaction{}, &models.OrderDelivery{}, &models.AppSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	db.Create(&models.Organization{Name: "RSUD Tidar"})
+	seedRegions(db)
 	svc := models.Service{Name: "Reguler", PriceBase: 12000, IsActive: true}
 	db.Create(&svc)
 	dahlia := models.Ward{Name: "Dahlia 1", IsActive: true}
@@ -51,7 +52,7 @@ func TestOrderPharmacy(t *testing.T) {
 		body := map[string]any{
 			"service_id": svc.ID, "customer_name": "Budi", "customer_phone": "081234567890",
 			"dropoff_address": "Jl. Pemuda 12, Magelang", "patient_name": "Budi", "medical_record_no": "RM1",
-			"payment_method": "cash",
+			"payment_method": "cash", "dropoff_region_code": "33.71.01.1010",
 		}
 		for k, v := range extra {
 			body[k] = v
@@ -121,10 +122,11 @@ func TestPublicOrderPharmacyToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(&models.Organization{}, &models.Service{}, &models.ServiceTier{}, &models.Customer{},
-		&models.Order{}, &models.Ward{}, &models.OrderStatusHistory{}, &models.Transaction{}, &models.AppSetting{}); err != nil {
+		&models.Order{}, &models.Ward{}, &models.Region{}, &models.OrderStatusHistory{}, &models.Transaction{}, &models.AppSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	db.Create(&models.Organization{Name: "RSUD Tidar"})
+	seedRegions(db)
 	svc := models.Service{Name: "Reguler", PriceBase: 12000, IsActive: true}
 	db.Create(&svc)
 	ward := models.Ward{Name: "ICU", IsActive: true}
@@ -138,7 +140,7 @@ func TestPublicOrderPharmacyToggle(t *testing.T) {
 		body := map[string]any{
 			"service_id": svc.ID, "customer_name": "Budi", "customer_phone": "081234567890",
 			"dropoff_address": "Jl. Pemuda 12, Magelang", "patient_name": "Budi", "medical_record_no": "RM1",
-			"payment_method": "cash",
+			"payment_method": "cash", "dropoff_region_code": "33.71.01.1010",
 		}
 		for k, v := range extra {
 			body[k] = v

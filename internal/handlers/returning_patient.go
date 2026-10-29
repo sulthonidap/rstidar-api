@@ -68,13 +68,14 @@ func (h *PublicHandler) ReturningPatient(c *fiber.Ctx) error {
 			"Data pasien tidak ditemukan. Periksa lagi No. HP / No. Rekam Medis, atau isi data secara manual.")
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{
-		"customer_name":     found.CustomerName,
-		"customer_phone":    found.CustomerPhone,
-		"patient_name":      found.PatientName,
-		"medical_record_no": found.MedicalRecordNo,
-		"dropoff_address":   found.DropoffAddress,
-		"dropoff_lat":       found.DropoffLat,
-		"dropoff_lng":       found.DropoffLng,
+		"customer_name":       found.CustomerName,
+		"customer_phone":      found.CustomerPhone,
+		"patient_name":        found.PatientName,
+		"medical_record_no":   found.MedicalRecordNo,
+		"dropoff_address":     found.DropoffAddress,
+		"dropoff_lat":         found.DropoffLat,
+		"dropoff_lng":         found.DropoffLng,
+		"dropoff_region_code": found.DropoffRegionCode,
 	}})
 }
 
