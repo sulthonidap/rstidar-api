@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"strings"
 	"sync"
 
@@ -148,4 +149,75 @@ func (h *RegionHandler) Map(c *fiber.Ctx) error {
 		})
 	}
 	return c.JSON(fiber.Map{"data": out})
+}
+
+// simplifyRing: Douglas–Peucker (tolerance in degrees), coordinates rounded to
+// 5 decimals (~1 m) — for drawing, not for locating points.
+func simplifyRing(ring [][2]float64, tol float64) [][2]float64 {
+	if len(ring) <= 4 {
+		return ring
+	}
+	keep := make([]bool, len(ring))
+	keep[0], keep[len(ring)-1] = true, true
+	type span struct{ a, b int }
+	stack := []span{{0, len(ring) - 1}}
+	for len(stack) > 0 {
+		s := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		ay, ax, by, bx := ring[s.a][0], ring[s.a][1], ring[s.b][0], ring[s.b][1]
+		dx, dy := bx-ax, by-ay
+		length := math.Hypot(dx, dy)
+		far, idx := 0.0, -1
+		for i := s.a + 1; i < s.b; i++ {
+			var d float64
+			if length == 0 { // a closed ring's ends meet
+				d = math.Hypot(ring[i][1]-ax, ring[i][0]-ay)
+			} else {
+				d = math.Abs(dy*ring[i][1]-dx*ring[i][0]+bx*ay-by*ax) / length
+			}
+			if d > far {
+				far, idx = d, i
+			}
+		}
+		if far > tol && idx > 0 {
+			keep[idx] = true
+			stack = append(stack, span{s.a, idx}, span{idx, s.b})
+		}
+	}
+	out := make([][2]float64, 0, len(ring)/4)
+	for i, p := range ring {
+		if keep[i] {
+			out = append(out, [2]float64{math.Round(p[0]*1e5) / 1e5, math.Round(p[1]*1e5) / 1e5})
+		}
+	}
+	if len(out) < 4 {
+		return ring
+	}
+	return out
+}
+
+// Area — GET /api/public/regions/area: the served kelurahan/desa outlines
+// (simplified, for drawing) and their bounds, so the order forms' map shades
+// what's outside and stays around the area. data null = no outlines known.
+func (h *RegionHandler) Area(c *fiber.Ctx) error {
+	area := loadServiceArea(h.DB)
+	rings := [][][2]float64{}
+	minLat, maxLat, minLng, maxLng := 90.0, -90.0, 180.0, -180.0
+	for _, b := range loadBoundaries(h.DB) {
+		if !inArea(area, b.code) {
+			continue
+		}
+		for _, ring := range b.rings {
+			rings = append(rings, simplifyRing(ring, 0.00015))
+		}
+		minLat, maxLat = min(minLat, b.minLat), max(maxLat, b.maxLat)
+		minLng, maxLng = min(minLng, b.minLng), max(maxLng, b.maxLng)
+	}
+	if len(rings) == 0 {
+		return c.JSON(fiber.Map{"data": nil})
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{
+		"bounds": [2][2]float64{{minLat, minLng}, {maxLat, maxLng}},
+		"rings":  rings,
+	}})
 }

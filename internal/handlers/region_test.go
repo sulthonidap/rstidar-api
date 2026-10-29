@@ -212,6 +212,7 @@ func TestOrderPointRegion(t *testing.T) {
 	pub := &PublicHandler{DB: db}
 	app := fiber.New()
 	app.Post("/public/quote", pub.Quote)
+	app.Get("/public/regions/area", (&RegionHandler{DB: db}).Area)
 	api := app.Group("/api", func(c *fiber.Ctx) error {
 		c.Locals(middleware.UserContextKey, &cco)
 		return c.Next()
@@ -279,6 +280,12 @@ func TestOrderPointRegion(t *testing.T) {
 	}
 	if code, _ := call("PUT", fmt.Sprintf("/api/orders/%d/coordinates", id), map[string]any{"dropoff_lat": -7.29, "dropoff_lng": 110.09}); code != 422 {
 		t.Fatal("moving the point out of the area must be refused")
+	}
+
+	// The form map gets only the served outlines (not Parakan) and their bounds.
+	if _, out := call("GET", "/public/regions/area", nil); !strings.Contains(out, `"bounds":[[-7.6,110.1],[-7.48,`) ||
+		strings.Count(out, "],[") < 8 || strings.Contains(out, "-7.3") {
+		t.Fatalf("area: %s", out)
 	}
 
 	// The quote tells the form where the point is.
