@@ -111,7 +111,8 @@ func TestOrderServiceArea(t *testing.T) {
 	}
 	order := func(region any) map[string]any {
 		body := map[string]any{
-			"service_id": svc.ID, "customer_name": "Budi", "customer_phone": "081234567890",
+			// customer_name is ignored: the recipient is always the patient.
+			"service_id": svc.ID, "customer_name": "Ani", "customer_phone": "081234567890",
 			"dropoff_address": "Jl. Pemuda 12", "patient_name": "Budi", "medical_record_no": "RM1",
 			"payment_method": "cash", "care_type": "rawat_jalan", "pharmacy_queue_no": "A-1",
 		}
@@ -145,6 +146,9 @@ func TestOrderServiceArea(t *testing.T) {
 	if derefString(o.DropoffRegion) != "Kel. Tidar Utara, Kec. Magelang Selatan, Kota Magelang" {
 		t.Fatalf("label: %q", derefString(o.DropoffRegion))
 	}
+	if o.CustomerName != "Budi" {
+		t.Fatalf("staff order recipient must be the patient, got %q", o.CustomerName)
+	}
 	if code, out := call("POST", "/public/orders", order("33.08.01.2001")); code != 201 {
 		t.Fatalf("public order failed: %d %s", code, out)
 	}
@@ -152,6 +156,9 @@ func TestOrderServiceArea(t *testing.T) {
 	db.Last(&desa)
 	if derefString(desa.DropoffRegion) != "Desa Ngargoretno, Kec. Salaman, Kabupaten Magelang" {
 		t.Fatalf("label: %q", derefString(desa.DropoffRegion))
+	}
+	if desa.CustomerName != "Budi" {
+		t.Fatalf("public order recipient must be the patient, got %q", desa.CustomerName)
 	}
 
 	// Narrow the area to Kota Magelang: the Kab. Magelang order can still be edited

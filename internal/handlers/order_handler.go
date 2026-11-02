@@ -270,7 +270,7 @@ func (h *OrderHandler) Labels(c *fiber.Ctx) error {
 
 type storeOrderRequest struct {
 	ServiceID      uint    `json:"service_id" validate:"required"`
-	CustomerName   string  `json:"customer_name" validate:"required"`
+	CustomerName   string  `json:"-"` // always the patient's name, see orderExtras.patient
 	CustomerPhone  string  `json:"customer_phone" validate:"required"`
 	PickupAddress  string  `json:"pickup_address"` // optional: empty = defaultPickup
 	DropoffAddress string  `json:"dropoff_address" validate:"required"`
@@ -301,7 +301,7 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 		var saved models.Customer
 		if h.DB.First(&saved, *req.CustomerID).Error == nil {
 			if err := restoreMasked([]maskedField{
-				{&req.CustomerName, saved.Name, privacy.Name, "Nama penerima"},
+				{req.PatientName, saved.Name, privacy.Name, "Nama pasien"},
 				{&req.CustomerPhone, saved.Phone, privacy.Phone, "Nomor HP"},
 				{&req.DropoffAddress, saved.Address, privacy.Address, "Alamat tujuan"},
 			}); err != nil {
@@ -309,6 +309,11 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 			}
 		}
 	}
+	patientName, medicalRecordNo, err := req.patient()
+	if err != nil {
+		return err
+	}
+	req.CustomerName = *patientName // penerima = pasien, see orderExtras.patient
 	if err := validateOrderFields(req.ServiceID, &req.CustomerName, &req.CustomerPhone,
 		&req.PickupAddress, &req.DropoffAddress, req.Notes); err != nil {
 		return err
@@ -325,10 +330,6 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 	}
 	orgID := org.ID
 	scheduledDate, scheduledSlot, err := req.schedule(nil)
-	if err != nil {
-		return err
-	}
-	patientName, medicalRecordNo, err := req.patient()
 	if err != nil {
 		return err
 	}

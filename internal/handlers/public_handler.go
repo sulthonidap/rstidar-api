@@ -59,17 +59,16 @@ func validateOrderFields(serviceID uint, name, phone, pickup, dropoff *string, n
 
 type publicOrderRequest struct {
 	ServiceID      uint    `json:"service_id" validate:"required"`
-	CustomerName   string  `json:"customer_name" validate:"required"`
+	CustomerName   string  `json:"-"` // always the patient's name, see orderExtras.patient
 	CustomerPhone  string  `json:"customer_phone" validate:"required"`
 	PickupAddress  string  `json:"pickup_address"` // optional: empty = defaultPickup
 	DropoffAddress string  `json:"dropoff_address" validate:"required"`
 	Notes          *string `json:"notes"`
-	Website        string  `json:"website"` // honeypot — harus kosong
+	Website       string  `json:"website"` // honeypot — harus kosong
 	// Destination map point (optional, e.g. "gunakan lokasi saya").
 	DropoffLat *float64 `json:"dropoff_lat"`
 	DropoffLng *float64 `json:"dropoff_lng"`
-	// Optional, as on the staff form: the patient (when not the recipient) and
-	// their medical record number at the RS.
+	// The patient and their medical record number at the RS (required).
 	PatientName     *string `json:"patient_name"`
 	MedicalRecordNo *string `json:"medical_record_no"`
 	// Farmasi: asked (and required) only while the Admin turned it on.
@@ -93,16 +92,17 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 	if req.Website != "" {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "terdeteksi spam")
 	}
+	patientName, medicalRecordNo, err := (&orderExtras{PatientName: req.PatientName, MedicalRecordNo: req.MedicalRecordNo}).patient()
+	if err != nil {
+		return err
+	}
+	req.CustomerName = *patientName // penerima = pasien, see orderExtras.patient
 	if err := validateOrderFields(req.ServiceID, &req.CustomerName, &req.CustomerPhone,
 		&req.PickupAddress, &req.DropoffAddress, req.Notes); err != nil {
 		return err
 	}
 	if !validPoint(req.DropoffLat, req.DropoffLng) {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "titik tujuan harus di wilayah Indonesia")
-	}
-	patientName, medicalRecordNo, err := (&orderExtras{PatientName: req.PatientName, MedicalRecordNo: req.MedicalRecordNo}).patient()
-	if err != nil {
-		return err
 	}
 	paymentMethod, err := paymentMethodOf(req.PaymentMethod)
 	if err != nil {

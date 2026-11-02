@@ -24,7 +24,7 @@ var editableStatuses = map[enums.OrderStatus]bool{
 
 type updateOrderRequest struct {
 	ServiceID      uint    `json:"service_id"`
-	CustomerName   string  `json:"customer_name"`
+	CustomerName   string  `json:"-"` // always the patient's name, see orderExtras.patient
 	CustomerPhone  string  `json:"customer_phone"`
 	PickupAddress  string  `json:"pickup_address"`
 	DropoffAddress string  `json:"dropoff_address"`
@@ -60,7 +60,6 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 	}
 	// The form shows masked patient data; unchanged fields keep the real value.
 	if err := restoreMasked([]maskedField{
-		{&req.CustomerName, order.CustomerName, privacy.Name, "Nama penerima"},
 		{&req.CustomerPhone, order.CustomerPhone, privacy.Phone, "Nomor HP"},
 		{&req.DropoffAddress, order.DropoffAddress, privacy.Address, "Alamat tujuan"},
 		{req.PatientName, derefString(order.PatientName), privacy.Name, "Nama pasien"},
@@ -68,6 +67,11 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 	}); err != nil {
 		return err
 	}
+	patientName, medicalRecordNo, err := req.patient()
+	if err != nil {
+		return err
+	}
+	req.CustomerName = *patientName // penerima = pasien, see orderExtras.patient
 	if err := validateOrderFields(req.ServiceID, &req.CustomerName, &req.CustomerPhone,
 		&req.PickupAddress, &req.DropoffAddress, req.Notes); err != nil {
 		return err
@@ -81,10 +85,6 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 	}
 
 	scheduledDate, scheduledSlot, err := req.schedule(order.ScheduledDate)
-	if err != nil {
-		return err
-	}
-	patientName, medicalRecordNo, err := req.patient()
 	if err != nil {
 		return err
 	}
@@ -102,10 +102,7 @@ func (h *OrderHandler) Update(c *fiber.Ctx) error {
 		order.ServiceID = &service.ID
 		changed = append(changed, "layanan")
 	}
-	if req.CustomerName != order.CustomerName {
-		order.CustomerName = req.CustomerName
-		changed = append(changed, "nama penerima")
-	}
+	order.CustomerName = req.CustomerName // follows the patient's name; its change is logged as "data pasien"
 	if req.CustomerPhone != order.CustomerPhone {
 		order.CustomerPhone = req.CustomerPhone
 		changed = append(changed, "nomor HP")

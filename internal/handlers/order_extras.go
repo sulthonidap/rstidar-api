@@ -65,6 +65,10 @@ func (x *orderExtras) schedule(current *models.Date) (*models.Date, *enums.Sched
 
 // patient validates the patient data (trimmed): the RS needs both the name and
 // the medical record number to find the patient's prescription.
+//
+// The order's recipient (customer_name) is always the patient's name: the forms
+// only ask for the patient, and whoever actually takes the package is typed by
+// the courier on the proof of delivery.
 func (x *orderExtras) patient() (*string, *string, error) {
 	name, rm := trimOptional(x.PatientName), trimOptional(x.MedicalRecordNo)
 	if rm == nil {

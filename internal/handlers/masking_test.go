@@ -86,7 +86,8 @@ func TestPatientDataMasking(t *testing.T) {
 	}
 	var saved models.Order
 	db.First(&saved, order.ID)
-	if saved.CustomerName != "Budi Santoso" || saved.CustomerPhone != "081234567890" ||
+	// The recipient name now always follows the patient (an old order's "Budi Santoso" goes).
+	if saved.CustomerName != patient || saved.CustomerPhone != "081234567890" ||
 		saved.DropoffAddress != "Jl. Pemuda 12, Magelang" || *saved.PatientName != patient || *saved.MedicalRecordNo != mrn {
 		t.Fatalf("masked values overwrote the real data: %+v", saved)
 	}
@@ -94,17 +95,17 @@ func TestPatientDataMasking(t *testing.T) {
 		t.Fatal("the real change (notes) was not saved")
 	}
 
-	half := strings.Replace(string(body), `"B*** S******"`, `"B*** Santoso"`, 1)
+	half := strings.Replace(string(body), `"S*** A*****"`, `"S*** Aminah"`, 1)
 	if code, _ := call("PUT", "/api/orders/1", half); code != fiber.StatusUnprocessableEntity {
 		t.Fatalf("half-edited masked name must be rejected, got %d", code)
 	}
 
 	_, labels := call("POST", "/api/orders/labels", `{"ids":[1]}`)
 	list, _ := labels["data"].([]any)
-	if len(list) != 1 || list[0].(map[string]any)["customer_name"] != "Budi Santoso" {
+	if len(list) != 1 || list[0].(map[string]any)["customer_name"] != patient {
 		t.Fatalf("labels must print the real data, got %v", labels)
 	}
-	if _, courier := call("GET", "/api/courier/orders/1", ""); field(courier, "customer_name") != "Budi Santoso" {
+	if _, courier := call("GET", "/api/courier/orders/1", ""); field(courier, "customer_name") != patient {
 		t.Fatal("courier app must get the real data")
 	}
 }
