@@ -24,7 +24,8 @@ type EventsHandler struct {
 }
 
 // Stream — GET /api/events: Server-Sent Events stream of the order events the
-// logged-in CCO/Farmasi/Ops/Finance must act on (see realtime.Hub).
+// logged-in CCO/Farmasi/Ops/Finance must act on (see realtime.Hub), plus the
+// silent "orders.changed" every panel (Admin too) gets to refresh its lists.
 func (h *EventsHandler) Stream(c *fiber.Ctx) error {
 	user := middleware.CurrentUser(c)
 	events, unsubscribe := h.Hub.Subscribe(user.ID, user.RoleName())

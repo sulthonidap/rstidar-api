@@ -15,7 +15,7 @@ import (
 
 // OrderEvent is what a panel receives when an order needs someone's attention.
 type OrderEvent struct {
-	Type             string            `json:"type"` // "order.created" or "order.status"
+	Type             string            `json:"type"` // "order.created", "order.status", or "orders.changed" (see Changed)
 	OrderID          uint              `json:"order_id"`
 	Code             string            `json:"code"`
 	Status           enums.OrderStatus `json:"status"`
@@ -41,6 +41,9 @@ type subscriber struct {
 type Hub struct {
 	mu   sync.RWMutex
 	subs map[*subscriber]struct{}
+
+	changedMu      sync.Mutex
+	changedPending bool
 }
 
 func NewHub() *Hub {
@@ -81,6 +84,38 @@ func (h *Hub) Publish(e OrderEvent) {
 		default:
 		}
 	}
+}
+
+// ChangedDelay: Changed waits this long before telling the panels, so the
+// request's DB transaction has committed by the time they refetch, and a burst
+// of writes (one request touching order + payment + history) goes out as one.
+var ChangedDelay = 750 * time.Millisecond
+
+// Changed: some order data was written (see WatchOrders). Every connected
+// panel, whatever its role and including whoever caused it (their other tabs),
+// gets a silent "orders.changed" after ChangedDelay so its lists refetch.
+// Unlike Publish there's no toast/sound: it only keeps the screens current.
+func (h *Hub) Changed() {
+	h.changedMu.Lock()
+	defer h.changedMu.Unlock()
+	if h.changedPending {
+		return // already on its way
+	}
+	h.changedPending = true
+	time.AfterFunc(ChangedDelay, func() {
+		h.changedMu.Lock()
+		h.changedPending = false
+		h.changedMu.Unlock()
+
+		h.mu.RLock()
+		defer h.mu.RUnlock()
+		for s := range h.subs {
+			select {
+			case s.ch <- OrderEvent{Type: "orders.changed"}:
+			default:
+			}
+		}
+	})
 }
 
 func hasRole(roles []enums.UserRole, role enums.UserRole) bool {

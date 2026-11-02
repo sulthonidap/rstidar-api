@@ -19,6 +19,9 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	authH := &handlers.AuthHandler{DB: db, JWTSecret: jwtSecret, JWTTTL: jwtTTL}
 	// One hub per process: order handlers publish, /api/events streams to panels.
 	hub := realtime.NewHub()
+	if err := hub.WatchOrders(db); err != nil {
+		panic("realtime: " + err.Error())
+	}
 	orderH := handlers.NewOrderHandler(db, hub, store, router)
 	eventsH := &handlers.EventsHandler{Hub: hub}
 	orgH := &handlers.OrganizationHandler{DB: db}
@@ -67,7 +70,8 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	auth.Get("/auth/me", authH.Me)
 	// Live "order baru" notifications (Server-Sent Events) — only the CCO of the
 	// ordering RS validates new orders, so only CCOs subscribe.
-	auth.Get("/events", middleware.RequireRole(enums.RoleCco, enums.RoleFarmasi, enums.RoleOps, enums.RoleFinance), eventsH.Stream)
+	// Admin only gets the silent "orders.changed" (no step of the flow is theirs).
+	auth.Get("/events", middleware.RequireRole(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi, enums.RoleOps, enums.RoleFinance), eventsH.Stream)
 
 	// --- Aplikasi kurir: cuma order yang di-assign ke kurir yang login ---
 	// RequireCourier is attached per route, not on the group: Fiber group
