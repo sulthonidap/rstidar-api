@@ -22,6 +22,7 @@ const (
 	setFreeEnabled      = "free_program.enabled"
 	setFreePublic       = "free_program.public"
 	setFreeDomicile     = "free_program.domicile"
+	setFreeUmum         = "free_program.umum"
 	defaultFreeDomicile = "Kota Magelang"
 	// Catatan transaksi yang dilunasi otomatis karena gratis; dikenali lagi saat
 	// order batal gratis, supaya transaksinya kembali "belum bayar".
@@ -32,6 +33,9 @@ type freeProgram struct {
 	Enabled  bool   `json:"enabled"`  // di form order petugas
 	Public   bool   `json:"public"`   // di form pasien & kiosk (pengajuan)
 	Domicile string `json:"domicile"` // syarat domisili, mis. "Kota Magelang"
+	// Umum: kategori "Umum" bisa dipilih. Mati (default) = layanan khusus
+	// lansia/disabilitas, order baru wajib memilih salah satunya.
+	Umum bool `json:"umum"`
 }
 
 // active: the program runs on either form, so CCO can verify a claim.
@@ -39,7 +43,7 @@ func (p freeProgram) active() bool { return p.Enabled || p.Public }
 
 func loadFreeProgram(db *gorm.DB) freeProgram {
 	var rows []models.AppSetting
-	db.Where("name IN ?", []string{setFreeEnabled, setFreePublic, setFreeDomicile}).Find(&rows)
+	db.Where("name IN ?", []string{setFreeEnabled, setFreePublic, setFreeDomicile, setFreeUmum}).Find(&rows)
 	p := freeProgram{Domicile: defaultFreeDomicile}
 	for _, r := range rows {
 		if r.Value == nil {
@@ -50,6 +54,8 @@ func loadFreeProgram(db *gorm.DB) freeProgram {
 			p.Enabled = *r.Value == "1"
 		case setFreePublic:
 			p.Public = *r.Value == "1"
+		case setFreeUmum:
+			p.Umum = *r.Value == "1"
 		case setFreeDomicile:
 			if v := strings.TrimSpace(*r.Value); v != "" {
 				p.Domicile = v
@@ -83,6 +89,14 @@ func (in freeInput) apply(o *models.Order) error {
 	}
 	if o.PatientCategory == "" || o.PatientCategory == enums.PatientUmum {
 		o.PatientCategory, o.DomicileChecked = enums.PatientUmum, false
+	}
+	return nil
+}
+
+// requireCategory: selama kategori Umum dimatikan, order baru wajib lansia/disabilitas.
+func (p freeProgram) requireCategory(o *models.Order) error {
+	if !p.Umum && o.PatientCategory == enums.PatientUmum {
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "pilih kategori pasien: lansia atau disabilitas")
 	}
 	return nil
 }
@@ -202,6 +216,9 @@ func (h *SettingsHandler) UpdateFreeProgram(c *fiber.Ctx) error {
 		if err := h.set(tx, setFreePublic, flag(req.Public)); err != nil {
 			return err
 		}
+		if err := h.set(tx, setFreeUmum, flag(req.Umum)); err != nil {
+			return err
+		}
 		return h.set(tx, setFreeDomicile, req.Domicile)
 	})
 	if err != nil {
@@ -214,7 +231,7 @@ func (h *SettingsHandler) UpdateFreeProgram(c *fiber.Ctx) error {
 // kiosk ask for the patient category, and the domicile requirement to show.
 func (h *SettingsHandler) PublicFreeProgram(c *fiber.Ctx) error {
 	p := loadFreeProgram(h.DB)
-	return c.JSON(fiber.Map{"data": fiber.Map{"enabled": p.Public, "domicile": p.Domicile}})
+	return c.JSON(fiber.Map{"data": fiber.Map{"enabled": p.Public, "domicile": p.Domicile, "umum": p.Umum}})
 }
 
 // isFreeClaim: the patient asked for free delivery on the public form/kiosk and

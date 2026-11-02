@@ -156,8 +156,11 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		return err
 	}
 	note := "Order dibuat via form publik"
-	if loadFreeProgram(h.DB).Public {
+	if program := loadFreeProgram(h.DB); program.Public {
 		if err := req.publicFreeInput.apply(&order); err != nil {
+			return err
+		}
+		if err := program.requireCategory(&order); err != nil {
 			return err
 		}
 		if order.PatientCategory != enums.PatientUmum {

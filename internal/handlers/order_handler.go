@@ -392,6 +392,9 @@ func (h *OrderHandler) Store(c *fiber.Ctx) error {
 		if err := req.freeInput.apply(&order); err != nil {
 			return err
 		}
+		if err := program.requireCategory(&order); err != nil {
+			return err
+		}
 	}
 	applyFree(program, &order, user.ID)
 	if order.IsFree {

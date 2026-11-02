@@ -236,6 +236,19 @@ func TestFreeProgramSwitches(t *testing.T) {
 		t.Fatalf("history must record the rejection: %v", rejNote.Note)
 	}
 
+	// Kategori Umum off (default): a new order must be lansia/disabilitas.
+	if code, _ := call("POST", "/public/orders", body(nil)); code != 422 {
+		t.Fatalf("umum off: public order without a category must be refused, got %d", code)
+	}
+	db.Create(&models.AppSetting{Name: setFreeEnabled, Value: ptr("1")})
+	if code, _ := call("POST", "/api/orders", body(map[string]any{"patient_category": "umum"})); code != 422 {
+		t.Fatalf("umum off: staff order as umum must be refused, got %d", code)
+	}
+	db.Create(&models.AppSetting{Name: setFreeUmum, Value: ptr("1")})
+	if code, out := call("POST", "/public/orders", body(map[string]any{"patient_category": "umum"})); code != 201 {
+		t.Fatalf("umum on: public umum order: %d %s", code, out)
+	}
+
 	// Public switch off: the category from the public form is ignored.
 	db.Model(&models.AppSetting{}).Where("name = ?", setFreePublic).Update("value", "0")
 	call("POST", "/public/orders", body(map[string]any{"patient_category": "lansia"}))
