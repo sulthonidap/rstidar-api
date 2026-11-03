@@ -173,7 +173,7 @@ func (h *PublicHandler) StoreOrder(c *fiber.Ctx) error {
 		// for the next order. Best effort: never lose the order over it.
 		if id, err := rememberCustomer(tx, org.ID, nil, customerContact{
 			Name: order.CustomerName, Phone: order.CustomerPhone, Address: order.DropoffAddress,
-			Lat: order.DropoffLat, Lng: order.DropoffLng, RegionCode: order.DropoffRegionCode,
+			Lat: order.DropoffLat, Lng: order.DropoffLng, RegionCode: order.DropoffRegionCode, Notes: order.Notes,
 		}); err == nil {
 			order.CustomerID = id
 		}

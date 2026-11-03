@@ -224,6 +224,7 @@ type customerContact struct {
 	Name, Phone, Address string
 	Lat, Lng             *float64
 	RegionCode           *string // kelurahan/desa; nil = unknown, keep the saved one
+	Notes                *string // patokan alamat; empty = keep the saved one
 }
 
 // rememberCustomer finds the RS's customer with the same phone AND name — one
@@ -233,6 +234,12 @@ func rememberCustomer(tx *gorm.DB, orgID uint, createdBy *uint, ct customerConta
 	name, phone := strings.TrimSpace(ct.Name), normalizePhone(ct.Phone)
 	if name == "" || phone == "" {
 		return nil, nil
+	}
+
+	var notes *string
+	if ct.Notes != nil && strings.TrimSpace(*ct.Notes) != "" {
+		n := strings.TrimSpace(*ct.Notes)
+		notes = &n
 	}
 
 	var customer models.Customer
@@ -246,6 +253,9 @@ func rememberCustomer(tx *gorm.DB, orgID uint, createdBy *uint, ct customerConta
 		if ct.RegionCode != nil {
 			customer.RegionCode = ct.RegionCode
 		}
+		if notes != nil {
+			customer.Notes = notes
+		}
 		err = tx.Save(&customer).Error
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		customer = models.Customer{
@@ -256,6 +266,7 @@ func rememberCustomer(tx *gorm.DB, orgID uint, createdBy *uint, ct customerConta
 			Lat:            ct.Lat,
 			Lng:            ct.Lng,
 			RegionCode:     ct.RegionCode,
+			Notes:          notes,
 			CreatedBy:      createdBy,
 		}
 		err = tx.Create(&customer).Error
@@ -278,6 +289,14 @@ func customerForOrder(tx *gorm.DB, orgID uint, userID uint, req *storeOrderReque
 		if err := tx.Where("id = ? AND organization_id = ?", *req.CustomerID, orgID).First(&customer).Error; err != nil {
 			return nil, fiber.NewError(fiber.StatusUnprocessableEntity, "customer tidak ditemukan")
 		}
+		// The staff may have fixed the patokan alamat on this order: keep it for next time.
+		if req.Notes != nil {
+			if n := strings.TrimSpace(*req.Notes); n != "" && (customer.Notes == nil || *customer.Notes != n) {
+				if err := tx.Model(&customer).Update("notes", n).Error; err != nil {
+					return nil, err
+				}
+			}
+		}
 		return &customer.ID, nil
 	}
 	if !req.SaveCustomer {
@@ -285,6 +304,6 @@ func customerForOrder(tx *gorm.DB, orgID uint, userID uint, req *storeOrderReque
 	}
 	return rememberCustomer(tx, orgID, &userID, customerContact{
 		Name: req.CustomerName, Phone: req.CustomerPhone, Address: req.DropoffAddress,
-		Lat: req.DropoffLat, Lng: req.DropoffLng, RegionCode: regionCode,
+		Lat: req.DropoffLat, Lng: req.DropoffLng, RegionCode: regionCode, Notes: req.Notes,
 	})
 }

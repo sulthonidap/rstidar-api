@@ -76,6 +76,7 @@ func (h *PublicHandler) ReturningPatient(c *fiber.Ctx) error {
 		"dropoff_lat":         found.DropoffLat,
 		"dropoff_lng":         found.DropoffLng,
 		"dropoff_region_code": found.DropoffRegionCode,
+		"notes":               found.Notes, // patokan alamat
 	}})
 }
 
