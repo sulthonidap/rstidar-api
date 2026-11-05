@@ -50,9 +50,9 @@ func TestMaskJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(out)
-	for _, want := range []string{`"customer_name":"B*** S******"`, `"customer_phone":"0812*****890"`,
-		`"receiver_name":"S***"`, `"name":"Reguler"`, `"name":"RSUD Tidar"`, `"phone":"0293123"`,
-		`"name":"A**"`, `"address":"Jl. Ah*** ****, Magelang"`, `"price":15000.5`, `"id":7`} {
+	for _, want := range []string{`"customer_name":"Budi Santoso"`, `"customer_phone":"0812*****890"`,
+		`"receiver_name":"Siti"`, `"name":"Reguler"`, `"name":"RSUD Tidar"`, `"phone":"0293123"`,
+		`"name":"Ani"`, `"phone":"0812*****888"`, `"address":"Jl. Ah*** ****, Magelang"`, `"price":15000.5`, `"id":7`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %s in %s", want, s)
 		}

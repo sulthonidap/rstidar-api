@@ -11,7 +11,6 @@ import (
 	"medsend-api/internal/enums"
 	"medsend-api/internal/middleware"
 	"medsend-api/internal/models"
-	"medsend-api/internal/privacy"
 	"medsend-api/internal/realtime"
 )
 
@@ -24,8 +23,8 @@ type EventsHandler struct {
 }
 
 // Stream — GET /api/events: Server-Sent Events stream of the order events the
-// logged-in CCO/Farmasi/Ops/Finance must act on (see realtime.Hub), plus the
-// silent "orders.changed" every panel (Admin too) gets to refresh its lists.
+// logged-in Admin/CCO/Farmasi/Ops/Finance must act on (see realtime.Hub), plus the
+// silent "orders.changed" every panel gets to refresh its lists.
 func (h *EventsHandler) Stream(c *fiber.Ctx) error {
 	user := middleware.CurrentUser(c)
 	events, unsubscribe := h.Hub.Subscribe(user.ID, user.RoleName())
@@ -65,6 +64,7 @@ func (h *EventsHandler) Stream(c *fiber.Ctx) error {
 // about an order that was just created ("order.created") or moved ("order.status").
 // order.Organization must be loaded for the RS name.
 // roles overrides who is told (default: realtime.NotifyRoles for the status).
+// Admin is always told too: at the RS one Admin may run every step of the flow.
 func publishOrderEvent(hub *realtime.Hub, eventType string, order *models.Order, actorID *uint, roles ...enums.UserRole) {
 	if len(roles) == 0 {
 		roles = realtime.NotifyRoles(order.Status)
@@ -72,6 +72,7 @@ func publishOrderEvent(hub *realtime.Hub, eventType string, order *models.Order,
 	if hub == nil || len(roles) == 0 {
 		return
 	}
+	roles = append(roles, enums.RoleAdmin)
 	orgName := ""
 	if order.Organization != nil {
 		orgName = order.Organization.Name
@@ -83,7 +84,7 @@ func publishOrderEvent(hub *realtime.Hub, eventType string, order *models.Order,
 		Status:           order.Status,
 		OrganizationID:   order.OrganizationID,
 		OrganizationName: orgName,
-		CustomerName:     privacy.Name(order.CustomerName), // notifikasi panel ikut disamarkan
+		CustomerName:     order.CustomerName,
 		Source:           string(order.Source),
 		ActorID:          actorID,
 		CreatedAt:        order.CreatedAt,

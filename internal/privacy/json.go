@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 )
 
-// orderFields: kunci JSON berisi data pasien di objek apa pun (order, rute
+// orderFields: kunci JSON berisi data pasien yang disamarkan (nama tidak) di objek apa pun (order, rute
 // kurir, transaksi, bukti terima, ...), di kedalaman mana pun.
 var orderFields = map[string]func(string) string{
-	"customer_name":     Name,
-	"patient_name":      Name,
-	"receiver_name":     Name,
 	"customer_phone":    Phone,
 	"medical_record_no": MedicalRecordNo,
 	"dropoff_address":   Address,
@@ -20,7 +17,6 @@ var orderFields = map[string]func(string) string{
 // objek yang memang pelanggan (punya "order_count"), supaya nama layanan, user,
 // atau RS tidak ikut tersamar.
 var customerFields = map[string]func(string) string{
-	"name":    Name,
 	"phone":   Phone,
 	"address": Address,
 }

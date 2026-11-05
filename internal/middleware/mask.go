@@ -8,13 +8,14 @@ import (
 	"medsend-api/internal/privacy"
 )
 
-// MaskPatientData menyamarkan data pasien di setiap respons JSON panel, untuk
+// MaskPatientData menyamarkan data pasien (kecuali nama) di setiap respons JSON panel, untuk
 // semua role (termasuk Admin). Dikecualikan:
 //   - /api/courier/...  aplikasi kurir: data lengkap untuk order miliknya
 //   - /api/orders/labels  cetak label: data lengkap untuk potongan bukti pesanan
 //     yang dibawa pasien (label paketnya sendiri tetap tersamar, diatur di panel)
+//   - .../private  ikon mata di panel: data asli satu order/customer, dicatat di log
 //
-// Ekspor Excel dan notifikasi realtime disamarkan di handler-nya masing-masing.
+// Halaman lacak publik menyamarkan datanya sendiri (nama juga).
 // Pasang setelah RequireAuth.
 func MaskPatientData() fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -23,7 +24,7 @@ func MaskPatientData() fiber.Handler {
 		}
 		path := c.Path()
 		// Wilayah: no patient data, and the map comes compressed (unreadable here).
-		if strings.HasPrefix(path, "/api/courier/") || path == "/api/orders/labels" || strings.HasPrefix(path, "/api/regions") {
+		if strings.HasPrefix(path, "/api/courier/") || path == "/api/orders/labels" || strings.HasPrefix(path, "/api/regions") || strings.HasSuffix(path, "/private") {
 			return nil
 		}
 		if !strings.HasPrefix(string(c.Response().Header.ContentType()), fiber.MIMEApplicationJSON) {

@@ -9,7 +9,6 @@ import (
 
 	"medsend-api/internal/enums"
 	"medsend-api/internal/models"
-	"medsend-api/internal/privacy"
 )
 
 // maxExportRows keeps one export from loading an unbounded table into memory.
@@ -82,7 +81,7 @@ func (h *TransactionHandler) Export(c *fiber.Ctx) error {
 		row := i + 5
 		code, customer, org, recordedBy := "", "", "", ""
 		if t.Order != nil {
-			code, customer = t.Order.Code, privacy.Name(t.Order.CustomerName)
+			code, customer = t.Order.Code, t.Order.CustomerName
 		}
 		if t.Organization != nil {
 			org = t.Organization.Name

@@ -47,6 +47,7 @@ func TestPatientDataMasking(t *testing.T) {
 		return c.Next()
 	}, middleware.MaskPatientData())
 	api.Get("/orders/:id", h.Show)
+	api.Get("/orders/:id/private", h.PrivateData)
 	api.Put("/orders/:id", h.Update)
 	api.Post("/orders/labels", h.Labels)
 	api.Get("/courier/orders/:id", h.Show) // stands in for the courier app (exempt path)
@@ -71,8 +72,8 @@ func TestPatientDataMasking(t *testing.T) {
 	}
 
 	_, shown := call("GET", "/api/orders/1", "")
-	if field(shown, "customer_name") != "B*** S******" || field(shown, "medical_record_no") != "******56" {
-		t.Fatalf("panel must get masked data, got %v / %v", field(shown, "customer_name"), field(shown, "medical_record_no"))
+	if field(shown, "customer_name") != "Budi Santoso" || field(shown, "medical_record_no") != "******56" {
+		t.Fatalf("panel must show the name and mask the rest, got %v / %v", field(shown, "customer_name"), field(shown, "medical_record_no"))
 	}
 
 	// Edit form sends the masked values back untouched + a real change in notes.
@@ -95,9 +96,9 @@ func TestPatientDataMasking(t *testing.T) {
 		t.Fatal("the real change (notes) was not saved")
 	}
 
-	half := strings.Replace(string(body), `"S*** A*****"`, `"S*** Aminah"`, 1)
+	half := strings.Replace(string(body), `"0812*****890"`, `"0812*****89"`, 1)
 	if code, _ := call("PUT", "/api/orders/1", half); code != fiber.StatusUnprocessableEntity {
-		t.Fatalf("half-edited masked name must be rejected, got %d", code)
+		t.Fatalf("half-edited masked phone must be rejected, got %d", code)
 	}
 
 	_, labels := call("POST", "/api/orders/labels", `{"ids":[1]}`)
@@ -107,5 +108,11 @@ func TestPatientDataMasking(t *testing.T) {
 	}
 	if _, courier := call("GET", "/api/courier/orders/1", ""); field(courier, "customer_name") != patient {
 		t.Fatal("courier app must get the real data")
+	}
+	// The panel's eye button.
+	_, private := call("GET", "/api/orders/1/private", "")
+	if field(private, "customer_phone") != "081234567890" || field(private, "medical_record_no") != mrn ||
+		field(private, "dropoff_address") != "Jl. Pemuda 12, Magelang" {
+		t.Fatalf("the eye button must get the real data, got %v", private)
 	}
 }

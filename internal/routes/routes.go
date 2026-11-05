@@ -68,9 +68,8 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	// Data pasien disamarkan di semua respons panel (kecuali aplikasi kurir & label).
 	auth := api.Group("", middleware.RequireAuth(db, jwtSecret), middleware.MaskPatientData())
 	auth.Get("/auth/me", authH.Me)
-	// Live "order baru" notifications (Server-Sent Events) — only the CCO of the
-	// ordering RS validates new orders, so only CCOs subscribe.
-	// Admin only gets the silent "orders.changed" (no step of the flow is theirs).
+	// Live order notifications (Server-Sent Events): each role gets the steps it
+	// must act on, Admin gets all of them (see publishOrderEvent).
 	auth.Get("/events", middleware.RequireRole(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi, enums.RoleOps, enums.RoleFinance), eventsH.Stream)
 
 	// --- Aplikasi kurir: cuma order yang di-assign ke kurir yang login ---
@@ -98,6 +97,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	orders.Get("/stats", admin(staff...), orderH.Stats)
 	orders.Post("/labels", admin(staff...), orderH.Labels) // data lengkap untuk resi (tidak disamarkan)
 	orders.Get("/:id", admin(staff...), orderH.Show)
+	orders.Get("/:id/private", admin(staff...), orderH.PrivateData) // ikon mata: data asli, dicatat di log
 	orders.Post("/", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi), orderH.Store)
 	orders.Put("/:id", admin(enums.RoleAdmin, enums.RoleCco), orderH.Update)
 	orders.Delete("/:id", admin(enums.RoleAdmin), orderH.Destroy) // hapus permanen, tanpa tombol di panel (terminal/Postman)
@@ -130,6 +130,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	// Customer tersimpan: CCO/Farmasi + Admin
 	customers := auth.Group("/customers", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi))
 	customers.Get("/", custH.Index)
+	customers.Get("/:id/private", custH.PrivateData)
 	customers.Post("/", custH.Store)
 	customers.Put("/:id", custH.Update)
 	customers.Delete("/:id", custH.Destroy)
