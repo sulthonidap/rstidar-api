@@ -3,6 +3,8 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -129,17 +131,26 @@ func (s *OrderService) recordTransaction(tx *gorm.DB, order *models.Order, actor
 }
 
 // GenerateOrderCode bikin nomor order MS-YYYYMMDD-0001, mirip
-// Order::generateCode() di Laravel.
+// Order::generateCode() di Laravel. Nomornya lanjut dari kode terbesar hari itu,
+// bukan jumlah order, supaya tidak bentrok kalau ada order yang dihapus.
 func GenerateOrderCode(db *gorm.DB) (string, error) {
-	today := time.Now().Format("20060102")
+	prefix := "MS-" + time.Now().Format("20060102") + "-"
 
-	var count int64
-	startOfDay := time.Now().Truncate(24 * time.Hour)
+	var codes []string
 	if err := db.Model(&models.Order{}).
-		Where("created_at >= ?", startOfDay).
-		Count(&count).Error; err != nil {
+		Where("code LIKE ?", prefix+"%").
+		Order("LENGTH(code) DESC, code DESC").
+		Limit(1).
+		Pluck("code", &codes).Error; err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("MS-%s-%04d", today, count+1), nil
+	last := 0
+	if len(codes) > 0 {
+		var err error
+		if last, err = strconv.Atoi(strings.TrimPrefix(codes[0], prefix)); err != nil {
+			return "", fmt.Errorf("kode order tidak dikenal %q: %w", codes[0], err)
+		}
+	}
+	return fmt.Sprintf("%s%04d", prefix, last+1), nil
 }

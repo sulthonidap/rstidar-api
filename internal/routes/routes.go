@@ -100,6 +100,7 @@ func Register(app *fiber.App, db *gorm.DB, store storage.Storage, router routing
 	orders.Get("/:id", admin(staff...), orderH.Show)
 	orders.Post("/", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi), orderH.Store)
 	orders.Put("/:id", admin(enums.RoleAdmin, enums.RoleCco), orderH.Update)
+	orders.Delete("/:id", admin(enums.RoleAdmin), orderH.Destroy) // hapus permanen, tanpa tombol di panel (terminal/Postman)
 	orders.Put("/:id/coordinates", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleOps), orderH.Coordinates)
 	// Which role may take which step is checked per order (enums.StaffCanMove).
 	orders.Post("/bulk-transition", admin(enums.RoleAdmin, enums.RoleCco, enums.RoleFarmasi), orderH.BulkTransition)
